@@ -173,8 +173,9 @@ export default function IndexScreen() {
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
 
-      <View className="flex-row items-center justify-between p-6 gap-4">
-        <View className="flex-row items-center gap-4">
+      {/* Header: logo+tên bên trái, user+logout gộp 1 cụm bên phải để dễ quét mắt */}
+      <View className="flex-row items-center justify-between px-6 pt-6 pb-4">
+        <View className="flex-row items-center gap-3">
           <View className="w-12 h-12 rounded-xl bg-blue-50 items-center justify-center border-2 border-blue-200">
             <Text className="text-blue-500 text-lg font-extrabold">RF</Text>
           </View>
@@ -199,7 +200,8 @@ export default function IndexScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="flex-1 px-6 pt-2">
+      {/* Nội dung chính: căn giữa theo chiều dọc trong khoảng trống còn lại, nút Confirm đi liền sau khối chọn */}
+      <View className="flex-1 px-6 justify-center">
         <ModernSelect
           label="Select Functions"
           placeholder="Choose function..."
@@ -217,9 +219,7 @@ export default function IndexScreen() {
           onSelect={setSelectedWarehouse}
           icon="box"
         />
-      </View>
 
-      <View className="p-6 pb-10 bg-slate-50">
         <TouchableOpacity
           style={[
             {
@@ -228,6 +228,7 @@ export default function IndexScreen() {
               paddingVertical: 16,
               borderRadius: 16,
               flexDirection: 'row',
+              marginTop: 8,
             },
             !isReady
               ? { backgroundColor: '#94A3B8' }

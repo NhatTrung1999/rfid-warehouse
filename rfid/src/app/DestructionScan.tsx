@@ -2,28 +2,34 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  FlatList, Modal, ScrollView, StatusBar,
-  Text, TextInput, TouchableOpacity, View,
+  FlatList,
+  Modal,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
-function calcColWidths<
-  K extends string,
-  T extends Record<K, unknown>
->(
+function calcColWidths<K extends string, T extends Record<K, unknown>>(
   cols: ReadonlyArray<{ readonly label: string; readonly key: K }>,
   data: T[],
   charWidth = 8,
   paddingH = 24,
   minW = 50,
 ) {
-  return cols.map(col => {
+  return cols.map((col) => {
     const maxDataLen = data.reduce((max, row) => {
       const val = String(row[col.key] ?? '');
       return Math.max(max, val.length);
     }, 0);
-    const width = Math.max(minW, (Math.max(col.label.length, maxDataLen) * charWidth) + paddingH);
+    const width = Math.max(
+      minW,
+      Math.max(col.label.length, maxDataLen) * charWidth + paddingH,
+    );
     return { label: col.label, key: col.key, width };
   });
 }
@@ -52,7 +58,7 @@ const SCAN_DATA = [
     CartonNumber: 'Carton Number',
     ScanOrder: 'ScanOrder',
     ExportTime: 'Export Time',
-  }
+  },
 ];
 
 const SCAN_COLS_DEF = [
@@ -79,24 +85,38 @@ const SCAN_COLS_DEF = [
 
 // ─── COMPACT DROPDOWN ─────────────────────────────────────────
 function CompactDropdown({
-  value, options, onSelect,
+  value,
+  options,
+  onSelect,
 }: {
-  value: string; options: string[]; onSelect: (v: string) => void;
+  value: string;
+  options: string[];
+  onSelect: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <View>
       <TouchableOpacity
         style={{
-          flexDirection: 'row', alignItems: 'center',
-          backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#E2E8F0',
-          borderRadius: 14, paddingHorizontal: 12, height: 40,
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#FFFFFF',
+          borderWidth: 2,
+          borderColor: '#E2E8F0',
+          borderRadius: 13,
+          paddingHorizontal: 12,
+          height: 38,
         }}
         onPress={() => setOpen(true)}
         activeOpacity={0.7}
       >
         <Text
-          style={{ flex: 1, fontSize: 13, fontWeight: '500', color: value ? '#0F172A' : '#94A3B8' }}
+          style={{
+            flex: 1,
+            fontSize: 13,
+            fontWeight: '500',
+            color: value ? '#0F172A' : '#94A3B8',
+          }}
           numberOfLines={1}
         >
           {value || 'Select...'}
@@ -104,31 +124,90 @@ function CompactDropdown({
         <Feather name="chevron-down" size={14} color="#94A3B8" />
       </TouchableOpacity>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
         <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', justifyContent: 'center', alignItems: 'center' }}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15,23,42,0.4)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
           onPress={() => setOpen(false)}
           activeOpacity={1}
         >
-          <View style={{ backgroundColor: 'white', borderRadius: 24, width: '75%', maxHeight: '55%', overflow: 'hidden' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 1.5, textTransform: 'uppercase' }}>Select Option</Text>
-              <TouchableOpacity onPress={() => setOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <View
+            style={{
+              backgroundColor: 'white',
+              borderRadius: 24,
+              width: '75%',
+              maxHeight: '55%',
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                borderBottomWidth: 1,
+                borderColor: '#F1F5F9',
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '700',
+                  color: '#94A3B8',
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Select Option
+              </Text>
+              <TouchableOpacity
+                onPress={() => setOpen(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Feather name="x" size={18} color="#94A3B8" />
               </TouchableOpacity>
             </View>
             <FlatList
               data={options}
-              keyExtractor={item => item}
+              keyExtractor={(item) => item}
               renderItem={({ item }) => {
                 const sel = item === value;
                 return (
                   <TouchableOpacity
-                    style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: '#F8FAFC', backgroundColor: sel ? '#EFF6FF' : 'white' }}
-                    onPress={() => { onSelect(item); setOpen(false); }}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      borderBottomWidth: 1,
+                      borderColor: '#F8FAFC',
+                      backgroundColor: sel ? '#EFF6FF' : 'white',
+                    }}
+                    onPress={() => {
+                      onSelect(item);
+                      setOpen(false);
+                    }}
                     activeOpacity={0.7}
                   >
-                    <Text style={{ fontSize: 15, fontWeight: sel ? '700' : '500', color: sel ? '#2563EB' : '#1E293B' }}>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: sel ? '700' : '500',
+                        color: sel ? '#2563EB' : '#1E293B',
+                      }}
+                    >
                       {item}
                     </Text>
                     {sel && <Feather name="check" size={16} color="#3B82F6" />}
@@ -144,7 +223,15 @@ function CompactDropdown({
 }
 
 // ─── CHECKBOX ─────────────────────────────────────────────────
-function Checkbox({ value, onToggle, label }: { value: boolean; onToggle: () => void; label: string }) {
+function Checkbox({
+  value,
+  onToggle,
+  label,
+}: {
+  value: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
   return (
     <TouchableOpacity
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
@@ -153,22 +240,34 @@ function Checkbox({ value, onToggle, label }: { value: boolean; onToggle: () => 
     >
       <View
         style={{
-          width: 18, height: 18, borderRadius: 5, borderWidth: 2,
+          width: 18,
+          height: 18,
+          borderRadius: 5,
+          borderWidth: 2,
           borderColor: value ? '#3B82F6' : '#CBD5E1',
           backgroundColor: value ? '#3B82F6' : '#FFFFFF',
-          alignItems: 'center', justifyContent: 'center',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         {value && <Feather name="check" size={11} color="white" />}
       </View>
-      <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>{label}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 // ─── ICON BUTTON ──────────────────────────────────────────────
 function IconBtn({
-  icon, label, bg, border, iconColor, textColor, onPress,
+  icon,
+  label,
+  bg,
+  border,
+  iconColor,
+  textColor,
+  onPress,
 }: {
   icon: React.ComponentProps<typeof Feather>['name'];
   label: string;
@@ -181,15 +280,23 @@ function IconBtn({
   return (
     <TouchableOpacity
       style={{
-        height: 38, paddingHorizontal: 14,
-        backgroundColor: bg, borderWidth: 1, borderColor: border,
-        borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5,
+        height: 34,
+        paddingHorizontal: 12,
+        backgroundColor: bg,
+        borderWidth: 1,
+        borderColor: border,
+        borderRadius: 11,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
       }}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Feather name={icon} size={13} color={iconColor} />
-      <Text style={{ fontSize: 12, fontWeight: '600', color: textColor }}>{label}</Text>
+      <Feather name={icon} size={12} color={iconColor} />
+      <Text style={{ fontSize: 11, fontWeight: '600', color: textColor }}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -217,35 +324,108 @@ export default function DestructionScan() {
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
 
       {/* ── HEADER ── */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          backgroundColor: 'white',
+          borderBottomWidth: 1,
+          borderColor: '#F1F5F9',
+        }}
+      >
         <TouchableOpacity
-          style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 11,
+            backgroundColor: '#F1F5F9',
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 12,
+          }}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Feather name="arrow-left" size={18} color="#0F172A" />
+          <Feather name="arrow-left" size={17} color="#0F172A" />
         </TouchableOpacity>
 
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 17, fontWeight: '700', color: '#0F172A' }}>Destruction Scan</Text>
-          <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>RFID Tag Scanner</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>
+            Destruction Scan
+          </Text>
+          <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>
+            RFID Tag Scanner
+          </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
-          <Feather name="map-pin" size={11} color="#3B82F6" style={{ marginRight: 4 }} />
-          <Text style={{ fontSize: 10, fontWeight: '700', color: '#1D4ED8' }} numberOfLines={1}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#EFF6FF',
+            borderWidth: 1,
+            borderColor: '#BFDBFE',
+            borderRadius: 18,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+          }}
+        >
+          <Feather
+            name="map-pin"
+            size={10}
+            color="#3B82F6"
+            style={{ marginRight: 4 }}
+          />
+          <Text
+            style={{ fontSize: 10, fontWeight: '700', color: '#1D4ED8' }}
+            numberOfLines={1}
+          >
             {warehouse ?? 'N/A'}
           </Text>
         </View>
       </View>
 
       {/* ── TOOLBAR ── */}
-      <View style={{ backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, gap: 10 }}>
-
+      <View
+        style={{
+          backgroundColor: 'white',
+          borderBottomWidth: 1,
+          borderColor: '#E2E8F0',
+          paddingHorizontal: 16,
+          paddingTop: 10,
+          paddingBottom: 10,
+          gap: 8,
+        }}
+      >
         {/* Row 1: Remark + SCAN */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 1.2, textTransform: 'uppercase' }}>Remark</Text>
-          <View style={{ flex: 1, backgroundColor: 'white', borderWidth: 2, borderColor: '#E2E8F0', borderRadius: 14, paddingHorizontal: 12, height: 42, justifyContent: 'center' }}>
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '700',
+              color: '#94A3B8',
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+            }}
+          >
+            Remark
+          </Text>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'white',
+              borderWidth: 2,
+              borderColor: '#E2E8F0',
+              borderRadius: 13,
+              paddingHorizontal: 12,
+              height: 38,
+              justifyContent: 'center',
+            }}
+          >
             <TextInput
               value={remark}
               onChangeText={setRemark}
@@ -255,18 +435,35 @@ export default function DestructionScan() {
           </View>
           <TouchableOpacity
             style={{
-              height: 42, paddingHorizontal: 20,
+              height: 38,
+              paddingHorizontal: 18,
               backgroundColor: scanning ? '#EF4444' : '#3B82F6',
-              borderRadius: 21, flexDirection: 'row', alignItems: 'center', gap: 6,
+              borderRadius: 19,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
               shadowColor: scanning ? '#EF4444' : '#3B82F6',
               shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 4,
             }}
             onPress={() => setScanning(!scanning)}
             activeOpacity={0.8}
           >
-            <Feather name={scanning ? 'square' : 'radio'} size={15} color="white" />
-            <Text style={{ fontSize: 13, fontWeight: '800', color: 'white', letterSpacing: 1 }}>
+            <Feather
+              name={scanning ? 'square' : 'radio'}
+              size={14}
+              color="white"
+            />
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '800',
+                color: 'white',
+                letterSpacing: 1,
+              }}
+            >
               {scanning ? 'STOP' : 'SCAN'}
             </Text>
           </TouchableOpacity>
@@ -274,47 +471,130 @@ export default function DestructionScan() {
 
         {/* Row 2a: Refresh / Save / Clear */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <IconBtn icon="refresh-cw" label="Refresh" bg="#EFF6FF" border="#BFDBFE" iconColor="#2563EB" textColor="#1D4ED8" />
-          <IconBtn icon="save" label="Save" bg="#10B981" border="#10B981" iconColor="white" textColor="white" />
-          <IconBtn icon="trash-2" label="Clear" bg="#FEF2F2" border="#FECACA" iconColor="#DC2626" textColor="#B91C1C" />
+          <IconBtn
+            icon="refresh-cw"
+            label="Refresh"
+            bg="#EFF6FF"
+            border="#BFDBFE"
+            iconColor="#2563EB"
+            textColor="#1D4ED8"
+          />
+          <IconBtn
+            icon="save"
+            label="Save"
+            bg="#10B981"
+            border="#10B981"
+            iconColor="white"
+            textColor="white"
+          />
+          <IconBtn
+            icon="trash-2"
+            label="Clear"
+            bg="#FEF2F2"
+            border="#FECACA"
+            iconColor="#DC2626"
+            textColor="#B91C1C"
+          />
           <View style={{ width: 1, height: 22, backgroundColor: '#E2E8F0' }} />
           <View style={{ flex: 1 }}>
-            <CompactDropdown value={filter} options={FILTER_LIST} onSelect={setFilter} />
+            <CompactDropdown
+              value={filter}
+              options={FILTER_LIST}
+              onSelect={setFilter}
+            />
           </View>
         </View>
 
         {/* Row 2b: Destroy Request (full width) */}
         <TouchableOpacity
           style={{
-            height: 40,
-            backgroundColor: '#DC2626', borderRadius: 12,
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-            shadowColor: '#DC2626', shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
+            height: 38,
+            backgroundColor: '#DC2626',
+            borderRadius: 11,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            shadowColor: '#DC2626',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 3,
           }}
-          onPress={() => router.push({ pathname: '/DestroyRequest' as any, params: { warehouse } })}
+          onPress={() =>
+            router.push({
+              pathname: '/DestroyRequest' as any,
+              params: { warehouse },
+            })
+          }
           activeOpacity={0.8}
         >
-          <Feather name="alert-triangle" size={14} color="white" />
-          <Text style={{ fontSize: 13, fontWeight: '700', color: 'white' }}>Destroy Request</Text>
+          <Feather name="alert-triangle" size={13} color="white" />
+          <Text style={{ fontSize: 13, fontWeight: '700', color: 'white' }}>
+            Destroy Request
+          </Text>
         </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <Checkbox value={releaseTag} onToggle={() => setReleaseTag(!releaseTag)} label="Release Tag" />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
+          <Checkbox
+            value={releaseTag}
+            onToggle={() => setReleaseTag(!releaseTag)}
+            label="Release Tag"
+          />
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <TouchableOpacity
-              style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                backgroundColor: '#F1F5F9',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
               onPress={() => setPage(Math.max(1, page - 1))}
               activeOpacity={0.7}
             >
               <Feather name="chevron-left" size={13} color="#475569" />
             </TouchableOpacity>
-            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}>{page}</Text>
+            <View
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                backgroundColor: '#EFF6FF',
+                borderWidth: 1,
+                borderColor: '#BFDBFE',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text
+                style={{ fontSize: 11, fontWeight: '700', color: '#1D4ED8' }}
+              >
+                {page}
+              </Text>
             </View>
             <TouchableOpacity
-              style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                backgroundColor: '#F1F5F9',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
               onPress={() => setPage(page + 1)}
               activeOpacity={0.7}
             >
@@ -325,9 +605,21 @@ export default function DestructionScan() {
       </View>
 
       {/* ── STATS STRIP ── */}
-      <View style={{ flexDirection: 'row', backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          backgroundColor: 'white',
+          borderBottomWidth: 1,
+          borderColor: '#E2E8F0',
+        }}
+      >
         {[
-          { label: 'SCANNED', value: scannedCount, sub: 'tags read', blue: true },
+          {
+            label: 'SCANNED',
+            value: scannedCount,
+            sub: 'tags read',
+            blue: true,
+          },
           { label: 'NOT YET', value: notYetCount, sub: 'pending', blue: false },
           { label: 'TOTAL', value: totalCount, sub: 'in batch', blue: false },
         ].map((item, i) => (
@@ -335,19 +627,46 @@ export default function DestructionScan() {
             key={item.label}
             style={{
               flex: 1,
-              paddingVertical: 10, paddingHorizontal: 12,
+              paddingVertical: 8,
+              paddingHorizontal: 12,
               backgroundColor: item.blue ? '#EFF6FF' : 'white',
               borderLeftWidth: i > 0 ? 1 : 0,
               borderColor: '#E2E8F0',
             }}
           >
-            <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: item.blue ? '#2563EB' : '#94A3B8', marginBottom: 2 }}>
+            <Text
+              style={{
+                fontSize: 9,
+                fontWeight: '700',
+                letterSpacing: 0.8,
+                textTransform: 'uppercase',
+                color: item.blue ? '#2563EB' : '#94A3B8',
+                marginBottom: 2,
+              }}
+            >
               {item.label}
             </Text>
-            <Text style={{ fontSize: 22, fontWeight: '500', lineHeight: 26, color: item.blue ? '#1E3A8A' : item.value === 0 ? '#CBD5E1' : '#0F172A' }}>
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '500',
+                lineHeight: 24,
+                color: item.blue
+                  ? '#1E3A8A'
+                  : item.value === 0
+                    ? '#CBD5E1'
+                    : '#0F172A',
+              }}
+            >
               {item.value}
             </Text>
-            <Text style={{ fontSize: 9, marginTop: 1, color: item.blue ? '#3B82F6' : '#94A3B8' }}>
+            <Text
+              style={{
+                fontSize: 9,
+                marginTop: 1,
+                color: item.blue ? '#3B82F6' : '#94A3B8',
+              }}
+            >
               {item.sub}
             </Text>
           </View>
@@ -356,25 +675,96 @@ export default function DestructionScan() {
 
       {/* ── DATA TABLE ── */}
       <View style={{ flex: 1, backgroundColor: 'white' }}>
-
         {/* Section label */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6, gap: 8 }}>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 1.2, textTransform: 'uppercase' }}>Scanned Tags</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, gap: 4, backgroundColor: scanning ? '#EFF6FF' : '#F1F5F9' }}>
-            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: scanning ? '#3B82F6' : '#94A3B8' }} />
-            <Text style={{ fontSize: 10, fontWeight: '700', color: scanning ? '#2563EB' : '#94A3B8' }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 4,
+            gap: 8,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: '700',
+              color: '#94A3B8',
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+            }}
+          >
+            Scanned Tags
+          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              borderRadius: 6,
+              gap: 4,
+              backgroundColor: scanning ? '#EFF6FF' : '#F1F5F9',
+            }}
+          >
+            <View
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: 3,
+                backgroundColor: scanning ? '#3B82F6' : '#94A3B8',
+              }}
+            />
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: '700',
+                color: scanning ? '#2563EB' : '#94A3B8',
+              }}
+            >
               {SCAN_DATA.length}
             </Text>
           </View>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} persistentScrollbar>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          persistentScrollbar
+        >
           <View>
             {/* Table header */}
-            <View style={{ flexDirection: 'row', borderBottomWidth: 2, borderColor: '#DBEAFE', backgroundColor: '#F0F5FF' }}>
-              {scanCols.map(c => (
-                <View key={c.label} style={{ width: c.width, paddingHorizontal: 12, paddingVertical: 10, borderRightWidth: 1, borderColor: '#DBEAFE', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.6 }} numberOfLines={1}>
+            <View
+              style={{
+                flexDirection: 'row',
+                borderBottomWidth: 2,
+                borderColor: '#DBEAFE',
+                backgroundColor: '#F0F5FF',
+              }}
+            >
+              {scanCols.map((c) => (
+                <View
+                  key={c.label}
+                  style={{
+                    width: c.width,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRightWidth: 1,
+                    borderColor: '#DBEAFE',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '800',
+                      color: '#1D4ED8',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.6,
+                    }}
+                    numberOfLines={1}
+                  >
                     {c.label}
                   </Text>
                 </View>
@@ -386,23 +776,44 @@ export default function DestructionScan() {
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item, index }) => {
                 const sel = selRow === index;
-                const rowBg = sel ? '#EFF6FF' : index % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+                const rowBg = sel
+                  ? '#EFF6FF'
+                  : index % 2 === 0
+                    ? '#FFFFFF'
+                    : '#F8FAFC';
                 return (
                   <TouchableOpacity
-                    style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', backgroundColor: rowBg }}
+                    style={{
+                      flexDirection: 'row',
+                      borderBottomWidth: 1,
+                      borderColor: '#F1F5F9',
+                      alignItems: 'center',
+                      backgroundColor: rowBg,
+                    }}
                     onPress={() => setSelRow(index)}
                     activeOpacity={0.7}
                   >
                     {sel && (
-                      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: '#3B82F6', zIndex: 1 }} />
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 3,
+                          backgroundColor: '#3B82F6',
+                          zIndex: 1,
+                        }}
+                      />
                     )}
                     {scanCols.map((col, ci) => (
-                      <Text key={ci}
+                      <Text
+                        key={ci}
                         style={{
                           width: col.width,
                           paddingHorizontal: 12,
                           paddingLeft: ci === 0 && sel ? 16 : 12,
-                          paddingVertical: 14,
+                          paddingVertical: 10,
                           fontSize: 12,
                           fontWeight: sel ? '600' : '400',
                           color: sel ? '#1D4ED8' : '#475569',

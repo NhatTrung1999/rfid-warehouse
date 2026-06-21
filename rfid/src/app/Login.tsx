@@ -119,10 +119,11 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
           keyboardShouldPersistTaps="handled"
         >
-          <View className="flex-1 px-6 pt-16 pb-10">
+          <View className="px-6 py-10">
+            {/* Logo + tiêu đề: gom thành 1 khối căn giữa, cách đều phần form bên dưới */}
             <View className="items-center mb-10">
               <View className="w-16 h-16 rounded-2xl bg-blue-50 items-center justify-center border-2 border-blue-200 mb-4">
                 <Text className="text-blue-500 text-2xl font-extrabold">
@@ -137,7 +138,8 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            <View className="flex-1">
+            {/* Form: 2 input nhóm liền nhau, nút hành động tách riêng bên dưới với khoảng cách rõ ràng */}
+            <View>
               <InputField
                 label="Tên đăng nhập"
                 value={username}
@@ -164,6 +166,7 @@ export default function LoginScreen() {
                   paddingVertical: 16,
                   borderRadius: 16,
                   flexDirection: 'row',
+                  marginTop: 8,
                 },
                 !isReady || isSubmitting
                   ? { backgroundColor: '#94A3B8' }
