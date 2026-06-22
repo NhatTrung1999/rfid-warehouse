@@ -21,7 +21,7 @@ import { AuthLogService } from '../auth-log/auth-log.service';
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: config.get<string>('JWT_EXPIRES_IN', '15m'),
+          expiresIn: config.get<string>('JWT_EXPIRES_IN', '15d'),
         } as any,
       }),
     }),

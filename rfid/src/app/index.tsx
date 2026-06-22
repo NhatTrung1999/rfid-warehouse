@@ -1,7 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -13,19 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { logout } from '../store/slices/authSlice';
+import { warehousesService, Warehouse } from '../lib/warehouses-service';
 
 const FUNCTIONS = [
   { label: 'Check In', value: 'CheckIn' },
   { label: 'Check Out', value: 'CheckOut' },
   { label: 'Destruction Scan', value: 'DestructionScan' },
-];
-
-const WAREHOUSES = [
-  { label: '2FFG', value: '2FFG' },
-  { label: '3FFG', value: '3FFG' },
-  { label: '4FFG', value: '4FFG' },
-  { label: '2MCS', value: '2MCS' },
-  { label: '3MCS', value: '3MCS' },
 ];
 
 interface ModernSelectProps {
@@ -35,6 +29,7 @@ interface ModernSelectProps {
   options: { label: string; value: string }[];
   onSelect: (value: string) => void;
   icon: keyof typeof Feather.glyphMap;
+  loading?: boolean;
 }
 
 function ModernSelect({
@@ -44,10 +39,10 @@ function ModernSelect({
   options,
   onSelect,
   icon,
+  loading,
 }: ModernSelectProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const selectedOption = options.find((opt) => opt.value === value);
-
   const iconColor = value ? '#3B82F6' : '#94A3B8';
 
   return (
@@ -60,13 +55,12 @@ function ModernSelect({
         className={`bg-white border-2 rounded-2xl p-4 shadow-sm flex-row items-center ${
           value ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'
         }`}
-        onPress={() => setModalVisible(true)}
+        onPress={() => !loading && setModalVisible(true)}
         activeOpacity={0.7}
       >
         <View className="mr-3">
           <Feather name={icon} size={20} color={iconColor} />
         </View>
-
         <View className="flex-1">
           <Text
             className={`text-base font-medium ${value ? 'text-slate-900' : 'text-slate-400'}`}
@@ -74,8 +68,11 @@ function ModernSelect({
             {selectedOption ? selectedOption.label : placeholder}
           </Text>
         </View>
-
-        <Feather name="chevron-down" size={16} color="#94A3B8" />
+        {loading ? (
+          <ActivityIndicator size="small" color="#94A3B8" />
+        ) : (
+          <Feather name="chevron-down" size={16} color="#94A3B8" />
+        )}
       </TouchableOpacity>
 
       <Modal visible={modalVisible} transparent={true} animationType="slide">
@@ -97,7 +94,6 @@ function ModernSelect({
                 />
               </TouchableOpacity>
             </View>
-
             <FlatList
               data={options}
               keyExtractor={(item) => item.value}
@@ -116,11 +112,16 @@ function ModernSelect({
                       setModalVisible(false);
                     }}
                   >
-                    <Text
-                      className={`text-base font-semibold ${isSelected ? 'text-blue-500' : 'text-slate-900'}`}
-                    >
-                      {item.label}
-                    </Text>
+                    <View>
+                      <Text
+                        className={`text-base font-semibold ${isSelected ? 'text-blue-500' : 'text-slate-900'}`}
+                      >
+                        {item.label}
+                      </Text>
+                      {/* <Text className="text-xs text-slate-400 mt-0.5">
+                        {item.value}
+                      </Text> */}
+                    </View>
                     {isSelected && (
                       <Feather name="check" size={20} color="#3B82F6" />
                     )}
@@ -139,19 +140,29 @@ export default function IndexScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+
   const [selectedFunc, setSelectedFunc] = useState<string | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(
     null,
   );
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(true);
 
   const isReady = selectedFunc && selectedWarehouse;
 
+  useEffect(() => {
+    warehousesService
+      .getWarehouses()
+      .then(setWarehouses)
+      .catch(() => Alert.alert('Lỗi', 'Không thể tải danh sách kho'))
+      .finally(() => setLoadingWarehouses(false));
+  }, []);
+
   const handleConfirm = () => {
     if (!isReady) {
-      Alert.alert('Incomplete', 'Please select both Functions and Warehouse.');
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn cả chức năng và kho.');
       return;
     }
-
     router.push({
       pathname: `/${selectedFunc}` as any,
       params: { warehouse: selectedWarehouse },
@@ -169,11 +180,15 @@ export default function IndexScreen() {
     ]);
   };
 
+  const warehouseOptions = warehouses.map((w) => ({
+    label: w.label,
+    value: w.value,
+  }));
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
 
-      {/* Header: logo+tên bên trái, user+logout gộp 1 cụm bên phải để dễ quét mắt */}
       <View className="flex-row items-center justify-between px-6 pt-6 pb-4">
         <View className="flex-row items-center gap-3">
           <View className="w-12 h-12 rounded-xl bg-blue-50 items-center justify-center border-2 border-blue-200">
@@ -190,7 +205,6 @@ export default function IndexScreen() {
             )}
           </View>
         </View>
-
         <TouchableOpacity
           onPress={handleLogout}
           className="w-10 h-10 rounded-xl bg-white border-2 border-slate-200 items-center justify-center"
@@ -200,7 +214,6 @@ export default function IndexScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Nội dung chính: căn giữa theo chiều dọc trong khoảng trống còn lại, nút Confirm đi liền sau khối chọn */}
       <View className="flex-1 px-6 justify-center">
         <ModernSelect
           label="Select Functions"
@@ -210,16 +223,17 @@ export default function IndexScreen() {
           onSelect={setSelectedFunc}
           icon="layers"
         />
-
         <ModernSelect
           label="Warehouse"
-          placeholder="Choose warehouse..."
+          placeholder={
+            loadingWarehouses ? 'Đang tải...' : 'Choose warehouse...'
+          }
           value={selectedWarehouse}
-          options={WAREHOUSES}
+          options={warehouseOptions}
           onSelect={setSelectedWarehouse}
           icon="box"
+          loading={loadingWarehouses}
         />
-
         <TouchableOpacity
           style={[
             {

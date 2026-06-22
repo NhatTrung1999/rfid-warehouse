@@ -7,6 +7,8 @@ import { UsersModule } from './modules/users/users.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { PrismaModule } from './prisma/prisma.module';
+import { WarehouseModule } from './modules/warehouse/warehouse.module';
+import { CheckinModule } from './modules/checkin/checkin.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    WarehouseModule,
+    CheckinModule,
   ],
   controllers: [AppController],
   providers: [

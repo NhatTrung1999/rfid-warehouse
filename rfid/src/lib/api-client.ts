@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { tokenStorage } from './token-storage';
 
-const API_BASE_URL = 'http://192.168.1.135:3157';
+const API_BASE_URL = 'http://192.168.18.42:3157';
 
 export interface ApiResponse<T> {
   statusCode: number;
