@@ -7,6 +7,7 @@ import {
   ScrollView,
   StatusBar,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -36,7 +37,8 @@ function calcColWidths<K extends string, T extends Record<K, unknown>>(
 // ─── DỮ LIỆU MẪU ─────────────────────────────────────────────
 const FROM_LIST = ['2FFG', '3FFG', '4FFG', '2MCS', '3MCS'];
 const TO_LIST = ['2FFG', '3FFG', '4FFG', '2MCS', '3MCS'];
-const REASON_LIST = ['還回 Hoàn trả', 'Transfer', 'Repair', 'Dispose'];
+const SHELF_LIST = ['A1', 'A2', 'B1', 'B2', 'C1'];
+const NO_LIST = ['1', '2', '3', '4', '5'];
 
 const SCAN_DATA = [
   {
@@ -202,11 +204,19 @@ export default function CheckOut() {
   const [destroy, setDestroy] = useState(false);
   const [noReturn, setNoReturn] = useState(false);
   const [punchHole, setPunchHole] = useState(false);
+  const [fg, setFg] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [reason, setReason] = useState(REASON_LIST[0]);
+  const [reason, setReason] = useState('');
+
+  const [shelf, setShelf] = useState('');
+  const [no, setNo] = useState('');
+  const [location, setLocation] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [outsource, setOutsource] = useState('');
 
   const [selRow, setSelRow] = useState<number | null>(null);
   const [returnDate] = useState('2026/06/16');
+  const [date] = useState('2026/06/16');
 
   const scanCols = useMemo(() => calcColWidths(SCAN_COLS_DEF, SCAN_DATA), []);
 
@@ -249,7 +259,7 @@ export default function CheckOut() {
 
       {/* ── TOOLBAR ── */}
       <View className="bg-white border-b border-slate-200 px-4 pt-2.5 pb-2.5 gap-2">
-        {/* Row 1: FROM / TO / User Scan */}
+        {/* Row 1: Dropdown group — From / To / Shelf / No */}
         <View className="flex-row items-end gap-2">
           <View style={{ flex: 1 }}>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
@@ -273,37 +283,157 @@ export default function CheckOut() {
               placeholder="Select"
             />
           </View>
-          <TouchableOpacity
-            className="bg-slate-100 border border-slate-200 rounded-xl px-3 h-9 flex-row items-center gap-1.5"
-            activeOpacity={0.7}
-          >
-            <Feather name="user" size={13} color="#475569" />
-            <Text className="text-[12px] font-semibold text-slate-600">
-              User Scan
-            </Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Row 2: Return Date / Clear / Save */}
-        <View className="flex-row items-center gap-2">
-          <View className="flex-1 flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-9 gap-1.5">
-            <Feather name="calendar" size={13} color="#3B82F6" />
-            <Text className="text-[12px] font-semibold text-slate-700 flex-1">
-              {returnDate}
+        <View className="flex-row items-end gap-2">
+          <View style={{ flex: 1 }}>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              Shelf
             </Text>
-            <Feather name="chevron-down" size={13} color="#94A3B8" />
+            <CompactDropdown
+              value={shelf}
+              options={SHELF_LIST}
+              onSelect={setShelf}
+              placeholder="Select"
+            />
           </View>
+          <View style={{ flex: 1 }}>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              No
+            </Text>
+            <CompactDropdown
+              value={no}
+              options={NO_LIST}
+              onSelect={setNo}
+              placeholder="Select"
+            />
+          </View>
+        </View>
+
+        {/* Row 2: Date group — Return Date / Date */}
+        <View className="flex-row items-end gap-2">
+          <View style={{ flex: 1 }}>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              Return Date
+            </Text>
+            <View className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10 gap-1.5">
+              <Feather name="calendar" size={13} color="#3B82F6" />
+              <Text className="text-[12px] font-semibold text-slate-700 flex-1">
+                {returnDate}
+              </Text>
+              <Feather name="chevron-down" size={13} color="#94A3B8" />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              Date
+            </Text>
+            <View className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10 gap-1.5">
+              <Feather name="calendar" size={13} color="#3B82F6" />
+              <Text className="text-[12px] font-semibold text-slate-700 flex-1">
+                {date}
+              </Text>
+              <Feather name="chevron-down" size={13} color="#94A3B8" />
+            </View>
+          </View>
+        </View>
+
+        {/* Row 4: Text input group — Purpose / Outsource */}
+        <View className="flex-row items-end gap-2">
+          <View style={{ flex: 1 }}>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              Purpose
+            </Text>
+            <TextInput
+              value={purpose}
+              onChangeText={setPurpose}
+              placeholder="Purpose"
+              placeholderTextColor="#CBD5E1"
+              className="bg-white border-2 border-slate-200 rounded-xl px-3 h-10 text-sm font-medium text-slate-900"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+              Outsource
+            </Text>
+            <TextInput
+              value={outsource}
+              onChangeText={setOutsource}
+              placeholder="Outsource"
+              placeholderTextColor="#CBD5E1"
+              className="bg-white border-2 border-slate-200 rounded-xl px-3 h-10 text-sm font-medium text-slate-900"
+            />
+          </View>
+        </View>
+
+        {/* Row 5: Reason (text input) */}
+        <View style={{ flex: 1 }}>
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+            Reason
+          </Text>
+          <TextInput
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Reason"
+            placeholderTextColor="#CBD5E1"
+            className="bg-white border-2 border-slate-200 rounded-xl px-3 h-10 text-sm font-medium text-slate-900"
+          />
+        </View>
+
+        {/* Row 5b: Checkbox group — Destroy / Punch Hole / No Return / FG */}
+        <View className="flex-row items-center justify-between">
+          <Checkbox
+            value={destroy}
+            onToggle={() => setDestroy(!destroy)}
+            label="Destroy"
+          />
+          <Checkbox
+            value={punchHole}
+            onToggle={() => setPunchHole(!punchHole)}
+            label="Punch Hole"
+          />
+          <Checkbox
+            value={noReturn}
+            onToggle={() => setNoReturn(!noReturn)}
+            label="No Return"
+          />
+          <Checkbox value={fg} onToggle={() => setFg(!fg)} label="FG" />
+        </View>
+
+        {/* Row 6: Action button group — Location / Clear / Save / SCAN */}
+        <View className="flex-row items-center gap-2">
           <TouchableOpacity
             style={{
-              height: 36,
-              paddingHorizontal: 14,
+              flex: 1,
+              height: 40,
+              backgroundColor: '#F1F5F9',
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              borderRadius: 11,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}
+            activeOpacity={0.7}
+          >
+            <Feather name="map-pin" size={13} color="#475569" />
+            <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>
+              {location || 'Location'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              height: 40,
               backgroundColor: '#FEF2F2',
               borderWidth: 1,
               borderColor: '#FECACA',
               borderRadius: 11,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 5,
+              justifyContent: 'center',
+              gap: 4,
             }}
             activeOpacity={0.7}
           >
@@ -314,13 +444,14 @@ export default function CheckOut() {
           </TouchableOpacity>
           <TouchableOpacity
             style={{
-              height: 36,
-              paddingHorizontal: 14,
+              flex: 1,
+              height: 40,
               backgroundColor: '#10B981',
               borderRadius: 11,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 5,
+              justifyContent: 'center',
+              gap: 4,
             }}
             activeOpacity={0.8}
           >
@@ -329,48 +460,16 @@ export default function CheckOut() {
               Save
             </Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Row 3: Destroy / No Return / Punch Hole */}
-        <View className="flex-row items-center justify-between">
-          <Checkbox
-            value={destroy}
-            onToggle={() => setDestroy(!destroy)}
-            label="Destroy"
-          />
-          <Checkbox
-            value={noReturn}
-            onToggle={() => setNoReturn(!noReturn)}
-            label="No Return"
-          />
-          <Checkbox
-            value={punchHole}
-            onToggle={() => setPunchHole(!punchHole)}
-            label="Punch Hole"
-          />
-        </View>
-
-        {/* Row 4: Reason / SCAN full width */}
-        <View className="flex-row items-center gap-2">
-          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Reason
-          </Text>
-          <View style={{ flex: 1 }}>
-            <CompactDropdown
-              value={reason}
-              options={REASON_LIST}
-              onSelect={setReason}
-            />
-          </View>
           <TouchableOpacity
             style={{
+              flex: 1,
               height: 40,
-              paddingHorizontal: 18,
               backgroundColor: scanning ? '#EF4444' : '#3B82F6',
-              borderRadius: 20,
+              borderRadius: 11,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'center',
+              gap: 4,
               shadowColor: scanning ? '#EF4444' : '#3B82F6',
               shadowOffset: { width: 0, height: 3 },
               shadowOpacity: 0.3,
@@ -382,17 +481,10 @@ export default function CheckOut() {
           >
             <Feather
               name={scanning ? 'square' : 'radio'}
-              size={14}
+              size={13}
               color="white"
             />
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: '800',
-                color: 'white',
-                letterSpacing: 1,
-              }}
-            >
+            <Text style={{ fontSize: 11, fontWeight: '800', color: 'white' }}>
               {scanning ? 'STOP' : 'SCAN'}
             </Text>
           </TouchableOpacity>

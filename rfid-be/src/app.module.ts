@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CheckinModule } from './modules/checkin/checkin.module';
+import { CheckoutModule } from './modules/checkout/checkout.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CheckinModule } from './modules/checkin/checkin.module';
     UsersModule,
     WarehouseModule,
     CheckinModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [

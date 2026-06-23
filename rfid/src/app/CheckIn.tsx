@@ -1,7 +1,9 @@
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   ScrollView,
@@ -12,6 +14,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ShelfOption } from '../lib/checkin-service';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import {
+  clearTags,
+  fetchCartons,
+  fetchDeliveries,
+  fetchShelves,
+  fetchTags,
+} from '../store/slices/checkinSlice';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
 function calcColWidths<K extends string, T extends Record<K, unknown>>(
@@ -34,69 +45,12 @@ function calcColWidths<K extends string, T extends Record<K, unknown>>(
   });
 }
 
-// ─── DỮ LIỆU MẪU ──────────────────────────────────────────────
-const HISTORY = [
-  {
-    DeliverNO: 'DeliverNO DeliverNO',
-    From: 'From',
-    To: 'To',
-    DeliverPerson: 'Deliver Person',
-    Quant: 'Quant',
-    Account: 'Account',
-    Date: 'Date',
-    Remark: 'Remark',
-    Purpose: 'Purpose',
-  },
-  {
-    DeliverNO: 'DeliverNO1',
-    From: 'From1',
-    To: 'To1',
-    DeliverPerson: 'Deliver Person1',
-    Quant: 'Quant1',
-    Account: 'Account1',
-    Date: 'Date1',
-    Remark: 'Remark1',
-    Purpose: 'Purpose1',
-  },
-];
+// ─── CONSTANTS ────────────────────────────────────────────────
 
-const TAGS = [
-  {
-    Scan: 'Scan',
-    EPC: 'EPC',
-    PH: 'PH',
-    Note: 'Note',
-    NoticeNo: 'Notice No',
-    SerialNo: 'SerialNo',
-    Article: 'Article',
-    FD: 'FD',
-    DevTp: 'DevTp',
-    Stage: 'Stage',
-    Season: 'Season',
-    ShoesType: 'ShoesType',
-    Size: 'Size',
-    Carton: 'Carton',
-  },
-  {
-    Scan: 'Scan1',
-    EPC: 'EPC1',
-    PH: 'PH1',
-    Note: 'Note1',
-    NoticeNo: 'Notice No1',
-    SerialNo: 'SerialNo1',
-    Article: 'Article1',
-    FD: 'FD1',
-    DevTp: 'DevTp1',
-    Stage: 'Stage1',
-    Season: 'Season1',
-    ShoesType: 'ShoesType1',
-    Size: 'Size1',
-    Carton: 'Carton1',
-  },
-];
-
-const SHELVES = ['2FFG - A1', '2FFG - A2'];
-const CARTONS = ['2FFG - A1 - 001', '2FFG - A1 - 002'];
+const NO_OPTIONS: ShelfOption[] = Array.from({ length: 10 }, (_, i) => ({
+  label: String(i + 1),
+  value: String(i + 1),
+}));
 
 const HIST_COLS_DEF = [
   { label: 'DeliverNO', key: 'DeliverNO' },
@@ -109,6 +63,7 @@ const HIST_COLS_DEF = [
   { label: 'Remark', key: 'Remark' },
   { label: 'Purpose', key: 'Purpose' },
 ] as const;
+
 const TAG_COLS_DEF = [
   { label: 'Scan', key: 'Scan' },
   { label: 'EPC', key: 'EPC' },
@@ -131,26 +86,34 @@ function CompactDropdown({
   value,
   options,
   onSelect,
+  loading,
 }: {
   value: string;
-  options: string[];
+  options: ShelfOption[];
   onSelect: (v: string) => void;
+  loading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
+
   return (
     <View>
       <TouchableOpacity
         className="flex-row items-center bg-white border-2 border-slate-200 rounded-2xl px-3 h-11"
-        onPress={() => setOpen(true)}
+        onPress={() => !loading && setOpen(true)}
         activeOpacity={0.7}
       >
         <Text
           className="flex-1 text-sm font-medium text-slate-900"
           numberOfLines={1}
         >
-          {value}
+          {selectedLabel}
         </Text>
-        <Feather name="chevron-down" size={15} color="#94A3B8" />
+        {loading ? (
+          <ActivityIndicator size="small" color="#94A3B8" />
+        ) : (
+          <Feather name="chevron-down" size={15} color="#94A3B8" />
+        )}
       </TouchableOpacity>
 
       <Modal
@@ -165,7 +128,6 @@ function CompactDropdown({
           activeOpacity={1}
         >
           <View className="bg-white rounded-3xl w-3/4 max-h-[55%] overflow-hidden shadow-xl">
-            {/* Modal header */}
             <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-100">
               <Text className="text-xs font-bold text-slate-400 tracking-widest uppercase">
                 Select Option
@@ -179,14 +141,14 @@ function CompactDropdown({
             </View>
             <FlatList
               data={options}
-              keyExtractor={(item) => item}
+              keyExtractor={(item) => item.value}
               renderItem={({ item }) => {
-                const sel = item === value;
+                const sel = item.value === value;
                 return (
                   <TouchableOpacity
                     className={`flex-row justify-between items-center px-4 py-4 border-b border-slate-50 ${sel ? 'bg-blue-50' : ''}`}
                     onPress={() => {
-                      onSelect(item);
+                      onSelect(item.value);
                       setOpen(false);
                     }}
                     activeOpacity={0.7}
@@ -194,7 +156,7 @@ function CompactDropdown({
                     <Text
                       className={`text-[15px] ${sel ? 'font-bold text-blue-600' : 'font-medium text-slate-800'}`}
                     >
-                      {item}
+                      {item.label}
                     </Text>
                     {sel && <Feather name="check" size={16} color="#3B82F6" />}
                   </TouchableOpacity>
@@ -211,17 +173,84 @@ function CompactDropdown({
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 export default function CheckIn() {
   const router = useRouter();
-  const [shelf, setShelf] = useState(SHELVES[0]);
-  const [carton, setCarton] = useState(CARTONS[0]);
-  const [no, setNo] = useState(1);
+  const dispatch = useAppDispatch();
+  const { warehouse } = useLocalSearchParams<{ warehouse: string }>();
+
+  // ── Redux state ──
+  const {
+    shelves,
+    loadingShelves,
+    cartons,
+    loadingCartons,
+    deliveries,
+    loadingDeliveries,
+    tags,
+    loadingTags,
+    error,
+  } = useAppSelector((state) => state.checkin);
+
+  // ── UI-only local state ──
+  const [shelf, setShelf] = useState('');
+  const [carton, setCarton] = useState('');
+  const [no, setNo] = useState('1');
   const [punchHole, setPunchHole] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [selHist, setSelHist] = useState<number | null>(4);
-  const [selTag, setSelTag] = useState<number | null>(0);
+  const [selDelivery, setSelDelivery] = useState<number | null>(null);
+  const [selTag, setSelTag] = useState<number | null>(null);
 
-  // Tính width động theo nội dung thực tế
-  const histCols = useMemo(() => calcColWidths(HIST_COLS_DEF, HISTORY), []);
-  const tagCols = useMemo(() => calcColWidths(TAG_COLS_DEF, TAGS), []);
+  // ── Load shelves khi warehouse thay đổi ──
+  useEffect(() => {
+    if (!warehouse) return;
+    dispatch(fetchShelves(warehouse));
+  }, [warehouse]);
+
+  // ── Set shelf mặc định khi shelves load xong ──
+  useEffect(() => {
+    if (shelves.length > 0) setShelf(shelves[0].value);
+  }, [shelves]);
+
+  // ── Load cartons khi shelf thay đổi ──
+  useEffect(() => {
+    if (!shelf) return;
+    setCarton('');
+    dispatch(fetchCartons(shelf));
+  }, [shelf]);
+
+  // ── Set carton mặc định khi cartons load xong ──
+  useEffect(() => {
+    if (cartons.length > 0) setCarton(cartons[0].value);
+  }, [cartons]);
+
+  // ── Load deliveries khi warehouse thay đổi ──
+  useEffect(() => {
+    if (!warehouse) return;
+    setSelDelivery(null);
+    dispatch(fetchDeliveries(warehouse));
+  }, [warehouse]);
+
+  // ── Load tags khi chọn delivery ──
+  useEffect(() => {
+    if (selDelivery === null) {
+      dispatch(clearTags());
+      return;
+    }
+    const deliveryNo = deliveries[selDelivery]?.DeliverNO;
+    if (!deliveryNo) return;
+    setSelTag(null);
+    dispatch(fetchTags(deliveryNo));
+  }, [selDelivery]);
+
+  // ── Hiển thị lỗi từ Redux ──
+  useEffect(() => {
+    if (error) Alert.alert('Lỗi', error);
+  }, [error]);
+
+  // ── Tính width động theo nội dung thực tế ──
+  const histCols = useMemo(
+    () => calcColWidths(HIST_COLS_DEF, deliveries),
+    [deliveries],
+  );
+  const tagCols = useMemo(() => calcColWidths(TAG_COLS_DEF, tags), [tags]);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
@@ -270,8 +299,9 @@ export default function CheckIn() {
             </Text>
             <CompactDropdown
               value={shelf}
-              options={SHELVES}
+              options={shelves}
               onSelect={setShelf}
+              loading={loadingShelves}
             />
           </View>
           <View className="flex-1">
@@ -280,52 +310,35 @@ export default function CheckIn() {
             </Text>
             <CompactDropdown
               value={carton}
-              options={CARTONS}
+              options={cartons}
               onSelect={setCarton}
+              loading={loadingCartons}
             />
           </View>
         </View>
 
-        {/* Row 2: No. stepper + Punch Hole */}
+        {/* Row 2: No. + Punch Hole */}
         <View className="flex-row mb-2">
-          {/* No. stepper */}
-          <View className="flex-1 flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl px-3 h-10 mr-3">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <View className="flex-1 mr-3">
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               No.
             </Text>
-            <View className="flex-row items-center gap-1">
-              <TouchableOpacity
-                className="w-6 h-6 rounded-lg bg-white border border-slate-200 items-center justify-center"
-                onPress={() => setNo(Math.max(1, no - 1))}
-                activeOpacity={0.7}
-              >
-                <Feather name="minus" size={12} color="#64748B" />
-              </TouchableOpacity>
-              <Text className="text-sm font-bold text-slate-900 w-7 text-center">
-                {no}
-              </Text>
-              <TouchableOpacity
-                className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200 items-center justify-center"
-                onPress={() => setNo(no + 1)}
-                activeOpacity={0.7}
-              >
-                <Feather name="plus" size={12} color="#3B82F6" />
-              </TouchableOpacity>
-            </View>
+            <CompactDropdown value={no} options={NO_OPTIONS} onSelect={setNo} />
           </View>
 
-          {/* Punch Hole toggle */}
-          <View className="flex-1 flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl px-3 h-10">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <View className="flex-1">
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               Punch Hole
             </Text>
-            <Switch
-              value={punchHole}
-              onValueChange={setPunchHole}
-              trackColor={{ true: '#3B82F6', false: '#CBD5E1' }}
-              thumbColor="#FFFFFF"
-              style={{ transform: [{ scaleX: 0.78 }, { scaleY: 0.78 }] }}
-            />
+            <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl px-3 h-11">
+              <Switch
+                value={punchHole}
+                onValueChange={setPunchHole}
+                trackColor={{ true: '#3B82F6', false: '#CBD5E1' }}
+                thumbColor="#FFFFFF"
+                style={{ transform: [{ scaleX: 0.78 }, { scaleY: 0.78 }] }}
+              />
+            </View>
           </View>
         </View>
 
@@ -426,23 +439,24 @@ export default function CheckIn() {
         </View>
       </View>
 
-      {/* ── BẢNG HISTORY ── */}
+      {/* ── BẢNG DELIVERY ── */}
       <View className="flex-1 bg-white border-b-4 border-slate-200">
-        {/* Section label */}
         <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
           <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            History
+            Delivery
           </Text>
           <View className="bg-blue-50 px-2 py-0.5 rounded-md">
             <Text className="text-[10px] font-bold text-blue-600">
-              {HISTORY.length}
+              {deliveries.length}
             </Text>
           </View>
+          {loadingDeliveries && (
+            <ActivityIndicator size="small" color="#94A3B8" />
+          )}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View>
-            {/* Sticky-style header — width tính động */}
             <View
               className="flex-row border-b-2 border-blue-100"
               style={{ backgroundColor: '#F0F5FF' }}
@@ -464,10 +478,10 @@ export default function CheckIn() {
             </View>
 
             <FlatList
-              data={HISTORY}
+              data={deliveries}
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item, index }) => {
-                const sel = selHist === index;
+                const sel = selDelivery === index;
                 const rowBg = sel
                   ? '#EFF6FF'
                   : index % 2 === 0
@@ -477,7 +491,7 @@ export default function CheckIn() {
                   <TouchableOpacity
                     className="flex-row border-b border-slate-100 items-center"
                     style={{ backgroundColor: rowBg }}
-                    onPress={() => setSelHist(index)}
+                    onPress={() => setSelDelivery(index)}
                     activeOpacity={0.7}
                   >
                     {sel && (
@@ -513,7 +527,6 @@ export default function CheckIn() {
 
       {/* ── BẢNG TAGS ── */}
       <View className="flex-[1.2] bg-white">
-        {/* Section label */}
         <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
           <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             Scanned Tags
@@ -532,9 +545,10 @@ export default function CheckIn() {
             <Text
               className={`text-[10px] font-bold ${scanning ? 'text-blue-600' : 'text-slate-400'}`}
             >
-              {TAGS.length}
+              {tags.length}
             </Text>
           </View>
+          {loadingTags && <ActivityIndicator size="small" color="#94A3B8" />}
         </View>
 
         <ScrollView
@@ -543,7 +557,6 @@ export default function CheckIn() {
           persistentScrollbar
         >
           <View>
-            {/* Sticky-style header — width tính động */}
             <View
               className="flex-row border-b-2 border-blue-100"
               style={{ backgroundColor: '#F0F5FF' }}
@@ -565,7 +578,7 @@ export default function CheckIn() {
             </View>
 
             <FlatList
-              data={TAGS}
+              data={tags}
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item, index }) => {
                 const sel = selTag === index;
