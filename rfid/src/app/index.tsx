@@ -165,7 +165,11 @@ export default function IndexScreen() {
     }
     router.push({
       pathname: `/${selectedFunc}` as any,
-      params: { warehouse: selectedWarehouse },
+      params: {
+        warehouse: selectedWarehouse,
+        warehouseLabel:
+          warehouses.find((w) => w.value === selectedWarehouse)?.label ?? '',
+      },
     });
   };
 

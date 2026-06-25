@@ -1,7 +1,10 @@
 import { Feather } from '@expo/vector-icons';
+import dayjs, { Dayjs } from 'dayjs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   ScrollView,
@@ -11,7 +14,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import DateTimePicker, {
+  DateType,
+  useDefaultStyles,
+} from 'react-native-ui-datepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DropdownOption, EpcData } from '../lib/checkout-service';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import {
+  fetchFrom,
+  fetchTo,
+  fetchShelf,
+  fetchEPC,
+  clearEpcs,
+} from '../store/slices/checkoutSlice';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
 function calcColWidths<K extends string, T extends Record<K, unknown>>(
@@ -34,30 +50,11 @@ function calcColWidths<K extends string, T extends Record<K, unknown>>(
   });
 }
 
-// ─── DỮ LIỆU MẪU ─────────────────────────────────────────────
-const FROM_LIST = ['2FFG', '3FFG', '4FFG', '2MCS', '3MCS'];
-const TO_LIST = ['2FFG', '3FFG', '4FFG', '2MCS', '3MCS'];
-const SHELF_LIST = ['A1', 'A2', 'B1', 'B2', 'C1'];
-const NO_LIST = ['1', '2', '3', '4', '5'];
-
-const SCAN_DATA = [
-  {
-    EPC: 'EPC',
-    Category: 'Category',
-    NoticeNo: 'NoticeNo',
-    CartonNumber: 'CartonNumber',
-    Action: 'Action',
-    Article: 'Article',
-    PH: 'PH',
-    FD: 'FD',
-    DevTp: 'DevTp',
-    Stage: 'Stage',
-    Season: 'Season',
-    ShoeName: 'ShoeName',
-    Size: 'Size',
-    ShoesType: 'ShoesType',
-  },
-];
+// ─── CONSTANTS ────────────────────────────────────────────────
+const NO_LIST: DropdownOption[] = ['1', '2', '3', '4', '5'].map((v) => ({
+  label: v,
+  value: v,
+}));
 
 const SCAN_COLS_DEF = [
   { label: 'EPC', key: 'EPC' },
@@ -82,27 +79,35 @@ function CompactDropdown({
   options,
   onSelect,
   placeholder,
+  loading,
 }: {
   value: string;
-  options: string[];
+  options: DropdownOption[];
   onSelect: (v: string) => void;
   placeholder?: string;
+  loading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
+
   return (
     <View>
       <TouchableOpacity
         className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10"
-        onPress={() => setOpen(true)}
+        onPress={() => !loading && setOpen(true)}
         activeOpacity={0.7}
       >
         <Text
           className={`flex-1 text-sm font-medium ${value ? 'text-slate-900' : 'text-slate-400'}`}
           numberOfLines={1}
         >
-          {value || placeholder || 'Select...'}
+          {value ? selectedLabel : (placeholder ?? 'Select...')}
         </Text>
-        <Feather name="chevron-down" size={14} color="#94A3B8" />
+        {loading ? (
+          <ActivityIndicator size="small" color="#94A3B8" />
+        ) : (
+          <Feather name="chevron-down" size={14} color="#94A3B8" />
+        )}
       </TouchableOpacity>
 
       <Modal
@@ -116,7 +121,7 @@ function CompactDropdown({
           onPress={() => setOpen(false)}
           activeOpacity={1}
         >
-          <View className="bg-white rounded-3xl w-3/4 max-h-[55%] overflow-hidden shadow-xl">
+          <View className="bg-white rounded-3xl w-3/4 max-h-[55%] overflow-hidden">
             <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-100">
               <Text className="text-xs font-bold text-slate-400 tracking-widest uppercase">
                 Select Option
@@ -130,14 +135,14 @@ function CompactDropdown({
             </View>
             <FlatList
               data={options}
-              keyExtractor={(item) => item}
+              keyExtractor={(item) => item.value}
               renderItem={({ item }) => {
-                const sel = item === value;
+                const sel = item.value === value;
                 return (
                   <TouchableOpacity
                     className={`flex-row justify-between items-center px-4 py-4 border-b border-slate-50 ${sel ? 'bg-blue-50' : ''}`}
                     onPress={() => {
-                      onSelect(item);
+                      onSelect(item.value);
                       setOpen(false);
                     }}
                     activeOpacity={0.7}
@@ -145,7 +150,7 @@ function CompactDropdown({
                     <Text
                       className={`text-[15px] ${sel ? 'font-bold text-blue-600' : 'font-medium text-slate-800'}`}
                     >
-                      {item}
+                      {item.label}
                     </Text>
                     {sel && <Feather name="check" size={16} color="#3B82F6" />}
                   </TouchableOpacity>
@@ -194,31 +199,255 @@ function Checkbox({
   );
 }
 
+// ─── DATE PICKER FIELD ────────────────────────────────────────
+function DatePickerField({
+  value,
+  onChange,
+}: {
+  value: DateType;
+  onChange: (d: DateType) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<DateType>(value);
+  const defaultStyles = useDefaultStyles();
+
+  const displayText = value
+    ? dayjs(value as Dayjs).format('YYYY/MM/DD')
+    : 'Select date';
+
+  return (
+    <View>
+      <TouchableOpacity
+        className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10 gap-1.5"
+        onPress={() => {
+          setPending(value);
+          setOpen(true);
+        }}
+        activeOpacity={0.7}
+      >
+        <Feather name="calendar" size={13} color="#3B82F6" />
+        <Text
+          className={`flex-1 text-[12px] font-semibold ${value ? 'text-slate-700' : 'text-slate-400'}`}
+          numberOfLines={1}
+        >
+          {displayText}
+        </Text>
+      </TouchableOpacity>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-slate-900/40 justify-center items-center"
+          onPress={() => setOpen(false)}
+          activeOpacity={1}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            className="bg-white rounded-[20px] p-4"
+            style={{ width: 310 }}
+          >
+            <DateTimePicker
+              mode="single"
+              date={pending}
+              onChange={({ date }) => setPending(date)}
+              styles={{
+                ...defaultStyles,
+                today: {
+                  borderWidth: 1.5,
+                  borderColor: '#2563EB',
+                  borderRadius: 999,
+                },
+                today_label: {
+                  color: '#2563EB',
+                  fontWeight: '700',
+                },
+                selected: {
+                  backgroundColor: '#2563EB',
+                  borderRadius: 999,
+                  borderWidth: 0,
+                },
+                selected_label: {
+                  color: '#FFFFFF',
+                  fontWeight: '700',
+                },
+              }}
+            />
+
+            {/* Footer */}
+            <View className="flex-row items-center justify-between border-t border-slate-100 pt-3 mt-1">
+              <View>
+                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Selected
+                </Text>
+                <Text className="text-[13px] font-bold text-slate-900 mt-0.5">
+                  {pending ? dayjs(pending as Dayjs).format('YYYY/MM/DD') : '—'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  onChange(pending);
+                  setOpen(false);
+                }}
+                activeOpacity={0.8}
+                className="rounded-[10px] px-5 py-2"
+                style={{ backgroundColor: pending ? '#2563EB' : '#CBD5E1' }}
+              >
+                <Text className="text-white text-[13px] font-bold">
+                  Confirm
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 export default function CheckOut() {
   const router = useRouter();
-  const { warehouse } = useLocalSearchParams<{ warehouse: string }>();
+  const dispatch = useAppDispatch();
+  const { warehouse, warehouseLabel } = useLocalSearchParams<{
+    warehouse: string;
+    warehouseLabel: string;
+  }>();
 
+  // ── Redux state ──
+  const {
+    fromOptions,
+    loadingFrom,
+    toOptions,
+    loadingTo,
+    shelfOptions,
+    loadingShelf,
+    epcs,
+    loadingEpcs,
+    error,
+  } = useAppSelector((state) => state.checkout);
+
+  // ── UI-only local state ──
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [destroy, setDestroy] = useState(false);
-  const [noReturn, setNoReturn] = useState(false);
-  const [punchHole, setPunchHole] = useState(false);
-  const [fg, setFg] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [reason, setReason] = useState('');
-
   const [shelf, setShelf] = useState('');
   const [no, setNo] = useState('');
-  const [location, setLocation] = useState('');
+  const [returnDate, setReturnDate] = useState<DateType>(dayjs());
+  const [date, setDate] = useState<DateType>(dayjs());
   const [purpose, setPurpose] = useState('');
   const [outsource, setOutsource] = useState('');
-
+  const [reason, setReason] = useState('');
+  const [destroy, setDestroy] = useState(false);
+  const [punchHole, setPunchHole] = useState(false);
+  const [noReturn, setNoReturn] = useState(false);
+  const [fg, setFg] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [selRow, setSelRow] = useState<number | null>(null);
-  const [returnDate] = useState('2026/06/16');
-  const [date] = useState('2026/06/16');
+  const [location, setLocation] = useState('');
 
-  const scanCols = useMemo(() => calcColWidths(SCAN_COLS_DEF, SCAN_DATA), []);
+  // ── Load From khi warehouse thay đổi ──
+  useEffect(() => {
+    if (!warehouse) return;
+    setFrom('');
+    dispatch(fetchFrom(warehouse));
+  }, [warehouse]);
+
+  useEffect(() => {
+    if (fromOptions.length > 0) setFrom(fromOptions[0].value);
+  }, [fromOptions]);
+
+  // ── Load To khi from thay đổi ──
+  useEffect(() => {
+    if (!from) return;
+    setTo('');
+    dispatch(fetchTo(from));
+  }, [from]);
+
+  useEffect(() => {
+    if (toOptions.length > 0) setTo(toOptions[0].value);
+  }, [toOptions]);
+
+  // ── Load Shelf khi warehouse thay đổi ──
+  useEffect(() => {
+    if (!warehouse) return;
+    setShelf('');
+    dispatch(fetchShelf(warehouse));
+  }, [warehouse]);
+
+  useEffect(() => {
+    if (shelfOptions.length > 0) setShelf(shelfOptions[0].value);
+  }, [shelfOptions]);
+
+  // ── Hiển thị lỗi ──
+  useEffect(() => {
+    if (error) Alert.alert('Lỗi', error);
+  }, [error]);
+
+  // ── RFID callback ──
+  const onTagScanned = useCallback(
+    (epc: string) => {
+      if (!scanning) return;
+      dispatch(fetchEPC(epc));
+    },
+    [scanning, dispatch],
+  );
+
+  const scanCols = useMemo(() => calcColWidths(SCAN_COLS_DEF, epcs), [epcs]);
+
+  const ROW_HEIGHT = 36;
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: ROW_HEIGHT,
+      offset: ROW_HEIGHT * index,
+      index,
+    }),
+    [],
+  );
+  const keyExtractorIndex = useCallback((_: any, i: number) => String(i), []);
+
+  const renderScanItem = useCallback(
+    ({ item, index }: { item: EpcData; index: number }) => {
+      const sel = selRow === index;
+      const rowBg = sel ? '#EFF6FF' : index % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      return (
+        <TouchableOpacity
+          className="flex-row border-b border-slate-100 items-center"
+          style={{ backgroundColor: rowBg }}
+          onPress={() => setSelRow(index)}
+          activeOpacity={0.7}
+        >
+          {sel && (
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                backgroundColor: '#3B82F6',
+                zIndex: 1,
+              }}
+            />
+          )}
+          {scanCols.map((col, ci) => (
+            <Text
+              key={ci}
+              style={{ width: col.width }}
+              className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
+              numberOfLines={1}
+            >
+              {String(item[col.key] ?? '')}
+            </Text>
+          ))}
+        </TouchableOpacity>
+      );
+    },
+    [selRow, scanCols],
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
@@ -252,24 +481,38 @@ export default function CheckOut() {
             className="text-[10px] font-bold text-blue-700"
             numberOfLines={1}
           >
-            {warehouse ?? 'N/A'}
+            {warehouseLabel ?? 'N/A'}
           </Text>
         </View>
       </View>
 
       {/* ── TOOLBAR ── */}
-      <View className="bg-white border-b border-slate-200 px-4 pt-2.5 pb-2.5 gap-2">
-        {/* Row 1: Dropdown group — From / To / Shelf / No */}
-        <View className="flex-row items-end gap-2">
+      <ScrollView
+        style={{ flexGrow: 0 }}
+        contentContainerStyle={{
+          backgroundColor: '#FFFFFF',
+          borderBottomWidth: 1,
+          borderBottomColor: '#E2E8F0',
+          paddingHorizontal: 16,
+          paddingTop: 10,
+          paddingBottom: 10,
+          gap: 8,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Row 1: From / To */}
+        <View className="flex-row gap-2">
           <View style={{ flex: 1 }}>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               From
             </Text>
             <CompactDropdown
               value={from}
-              options={FROM_LIST}
+              options={fromOptions}
               onSelect={setFrom}
               placeholder="Select"
+              loading={loadingFrom}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -278,23 +521,26 @@ export default function CheckOut() {
             </Text>
             <CompactDropdown
               value={to}
-              options={TO_LIST}
+              options={toOptions}
               onSelect={setTo}
               placeholder="Select"
+              loading={loadingTo}
             />
           </View>
         </View>
 
-        <View className="flex-row items-end gap-2">
+        {/* Row 2: Shelf / No */}
+        <View className="flex-row gap-2">
           <View style={{ flex: 1 }}>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               Shelf
             </Text>
             <CompactDropdown
               value={shelf}
-              options={SHELF_LIST}
+              options={shelfOptions}
               onSelect={setShelf}
               placeholder="Select"
+              loading={loadingShelf}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -310,36 +556,24 @@ export default function CheckOut() {
           </View>
         </View>
 
-        {/* Row 2: Date group — Return Date / Date */}
-        <View className="flex-row items-end gap-2">
+        {/* Row 3: Return Date / Date */}
+        <View className="flex-row gap-2">
           <View style={{ flex: 1 }}>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               Return Date
             </Text>
-            <View className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10 gap-1.5">
-              <Feather name="calendar" size={13} color="#3B82F6" />
-              <Text className="text-[12px] font-semibold text-slate-700 flex-1">
-                {returnDate}
-              </Text>
-              <Feather name="chevron-down" size={13} color="#94A3B8" />
-            </View>
+            <DatePickerField value={returnDate} onChange={setReturnDate} />
           </View>
           <View style={{ flex: 1 }}>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               Date
             </Text>
-            <View className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10 gap-1.5">
-              <Feather name="calendar" size={13} color="#3B82F6" />
-              <Text className="text-[12px] font-semibold text-slate-700 flex-1">
-                {date}
-              </Text>
-              <Feather name="chevron-down" size={13} color="#94A3B8" />
-            </View>
+            <DatePickerField value={date} onChange={setDate} />
           </View>
         </View>
 
-        {/* Row 4: Text input group — Purpose / Outsource */}
-        <View className="flex-row items-end gap-2">
+        {/* Row 4: Purpose / Outsource */}
+        <View className="flex-row gap-2">
           <View style={{ flex: 1 }}>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               Purpose
@@ -366,8 +600,8 @@ export default function CheckOut() {
           </View>
         </View>
 
-        {/* Row 5: Reason (text input) */}
-        <View style={{ flex: 1 }}>
+        {/* Row 5: Reason */}
+        <View>
           <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
             Reason
           </Text>
@@ -380,7 +614,7 @@ export default function CheckOut() {
           />
         </View>
 
-        {/* Row 5b: Checkbox group — Destroy / Punch Hole / No Return / FG */}
+        {/* Row 6: Checkboxes */}
         <View className="flex-row items-center justify-between">
           <Checkbox
             value={destroy}
@@ -400,8 +634,8 @@ export default function CheckOut() {
           <Checkbox value={fg} onToggle={() => setFg(!fg)} label="FG" />
         </View>
 
-        {/* Row 6: Action button group — Location / Clear / Save / SCAN */}
-        <View className="flex-row items-center gap-2">
+        {/* Row 7: Action buttons */}
+        <View className="flex-row gap-2">
           <TouchableOpacity
             style={{
               flex: 1,
@@ -422,6 +656,7 @@ export default function CheckOut() {
               {location || 'Location'}
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={{
               flex: 1,
@@ -435,6 +670,7 @@ export default function CheckOut() {
               justifyContent: 'center',
               gap: 4,
             }}
+            onPress={() => dispatch(clearEpcs())}
             activeOpacity={0.7}
           >
             <Feather name="trash-2" size={12} color="#DC2626" />
@@ -442,6 +678,7 @@ export default function CheckOut() {
               Clear
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={{
               flex: 1,
@@ -460,6 +697,7 @@ export default function CheckOut() {
               Save
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={{
               flex: 1,
@@ -470,13 +708,17 @@ export default function CheckOut() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 4,
-              shadowColor: scanning ? '#EF4444' : '#3B82F6',
-              shadowOffset: { width: 0, height: 3 },
-              shadowOpacity: 0.3,
-              shadowRadius: 6,
-              elevation: 4,
             }}
-            onPress={() => setScanning(!scanning)}
+            onPress={() => {
+              if (scanning) {
+                setScanning(false);
+                // TODO: SDK.stopScan()
+              } else {
+                dispatch(clearEpcs());
+                setScanning(true);
+                // TODO: SDK.startScan(onTagScanned)
+              }
+            }}
             activeOpacity={0.8}
           >
             <Feather
@@ -489,11 +731,10 @@ export default function CheckOut() {
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
 
       {/* ── BẢNG SCAN ── */}
       <View className="flex-1 bg-white">
-        {/* Section label */}
         <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
           <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             Scanned Tags
@@ -512,9 +753,16 @@ export default function CheckOut() {
             <Text
               className={`text-[10px] font-bold ${scanning ? 'text-blue-600' : 'text-slate-400'}`}
             >
-              {SCAN_DATA.length}
+              {epcs.length}
             </Text>
           </View>
+          {loadingEpcs && (
+            <ActivityIndicator
+              size="small"
+              color="#3B82F6"
+              style={{ marginLeft: 4 }}
+            />
+          )}
         </View>
 
         <ScrollView
@@ -523,7 +771,6 @@ export default function CheckOut() {
           persistentScrollbar
         >
           <View>
-            {/* Header */}
             <View
               className="flex-row border-b-2 border-blue-100"
               style={{ backgroundColor: '#F0F5FF' }}
@@ -545,48 +792,20 @@ export default function CheckOut() {
             </View>
 
             <FlatList
-              data={SCAN_DATA}
-              keyExtractor={(_, i) => String(i)}
-              renderItem={({ item, index }) => {
-                const sel = selRow === index;
-                const rowBg = sel
-                  ? '#EFF6FF'
-                  : index % 2 === 0
-                    ? '#FFFFFF'
-                    : '#F8FAFC';
-                return (
-                  <TouchableOpacity
-                    className="flex-row border-b border-slate-100 items-center"
-                    style={{ backgroundColor: rowBg }}
-                    onPress={() => setSelRow(index)}
-                    activeOpacity={0.7}
-                  >
-                    {sel && (
-                      <View
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          bottom: 0,
-                          width: 3,
-                          backgroundColor: '#3B82F6',
-                          zIndex: 1,
-                        }}
-                      />
-                    )}
-                    {scanCols.map((col, ci) => (
-                      <Text
-                        key={ci}
-                        style={{ width: col.width }}
-                        className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
-                        numberOfLines={1}
-                      >
-                        {String(item[col.key] ?? '')}
-                      </Text>
-                    ))}
-                  </TouchableOpacity>
-                );
-              }}
+              data={epcs}
+              keyExtractor={keyExtractorIndex}
+              renderItem={renderScanItem}
+              getItemLayout={getItemLayout}
+              ListEmptyComponent={
+                !loadingEpcs ? (
+                  <View className="items-center py-8">
+                    <Feather name="inbox" size={28} color="#CBD5E1" />
+                    <Text className="text-[11px] text-slate-400 mt-2">
+                      Chưa có dữ liệu scan
+                    </Text>
+                  </View>
+                ) : null
+              }
             />
           </View>
         </ScrollView>

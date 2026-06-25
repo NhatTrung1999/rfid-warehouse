@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -174,7 +174,10 @@ function CompactDropdown({
 export default function CheckIn() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { warehouse } = useLocalSearchParams<{ warehouse: string }>();
+  const { warehouse, warehouseLabel } = useLocalSearchParams<{
+    warehouse: string;
+    warehouseLabel: string;
+  }>();
 
   // ── Redux state ──
   const {
@@ -252,6 +255,98 @@ export default function CheckIn() {
   );
   const tagCols = useMemo(() => calcColWidths(TAG_COLS_DEF, tags), [tags]);
 
+  // ── FlatList optimizations ──
+  const ROW_HEIGHT = 36;
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: ROW_HEIGHT,
+      offset: ROW_HEIGHT * index,
+      index,
+    }),
+    [],
+  );
+  const keyExtractorIndex = useCallback((_: any, i: number) => String(i), []);
+
+  const renderDeliveryItem = useCallback(
+    ({ item, index }: { item: (typeof deliveries)[0]; index: number }) => {
+      const sel = selDelivery === index;
+      const rowBg = sel ? '#EFF6FF' : index % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      return (
+        <TouchableOpacity
+          className="flex-row border-b border-slate-100 items-center"
+          style={{ backgroundColor: rowBg }}
+          onPress={() => setSelDelivery(index)}
+          activeOpacity={0.7}
+        >
+          {sel && (
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                backgroundColor: '#3B82F6',
+                zIndex: 1,
+              }}
+            />
+          )}
+          {histCols.map((col, ci) => (
+            <Text
+              key={ci}
+              style={{ width: col.width }}
+              className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
+              numberOfLines={1}
+            >
+              {String(item[col.key] ?? '')}
+            </Text>
+          ))}
+        </TouchableOpacity>
+      );
+    },
+    [selDelivery, histCols],
+  );
+
+  const renderTagItem = useCallback(
+    ({ item, index }: { item: (typeof tags)[0]; index: number }) => {
+      const sel = selTag === index;
+      const rowBg = sel ? '#EFF6FF' : index % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      return (
+        <TouchableOpacity
+          className="flex-row border-b border-slate-100 items-center"
+          style={{ backgroundColor: rowBg }}
+          onPress={() => setSelTag(index)}
+          activeOpacity={0.7}
+        >
+          {sel && (
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 3,
+                backgroundColor: '#3B82F6',
+                zIndex: 1,
+              }}
+            />
+          )}
+          {tagCols.map((col, ci) => (
+            <Text
+              key={ci}
+              style={{ width: col.width }}
+              className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
+              numberOfLines={1}
+            >
+              {String(item[col.key] ?? '')}
+            </Text>
+          ))}
+        </TouchableOpacity>
+      );
+    },
+    [selTag, tagCols],
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
@@ -284,7 +379,7 @@ export default function CheckIn() {
             className="text-[10px] font-bold text-blue-700"
             numberOfLines={1}
           >
-            2F FG W/H
+            {warehouseLabel}
           </Text>
         </View>
       </View>
@@ -479,47 +574,9 @@ export default function CheckIn() {
 
             <FlatList
               data={deliveries}
-              keyExtractor={(_, i) => String(i)}
-              renderItem={({ item, index }) => {
-                const sel = selDelivery === index;
-                const rowBg = sel
-                  ? '#EFF6FF'
-                  : index % 2 === 0
-                    ? '#FFFFFF'
-                    : '#F8FAFC';
-                return (
-                  <TouchableOpacity
-                    className="flex-row border-b border-slate-100 items-center"
-                    style={{ backgroundColor: rowBg }}
-                    onPress={() => setSelDelivery(index)}
-                    activeOpacity={0.7}
-                  >
-                    {sel && (
-                      <View
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          bottom: 0,
-                          width: 3,
-                          backgroundColor: '#3B82F6',
-                          zIndex: 1,
-                        }}
-                      />
-                    )}
-                    {histCols.map((col, ci) => (
-                      <Text
-                        key={ci}
-                        style={{ width: col.width }}
-                        className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
-                        numberOfLines={1}
-                      >
-                        {String(item[col.key] ?? '')}
-                      </Text>
-                    ))}
-                  </TouchableOpacity>
-                );
-              }}
+              keyExtractor={keyExtractorIndex}
+              renderItem={renderDeliveryItem}
+              getItemLayout={getItemLayout}
             />
           </View>
         </ScrollView>
@@ -579,47 +636,9 @@ export default function CheckIn() {
 
             <FlatList
               data={tags}
-              keyExtractor={(_, i) => String(i)}
-              renderItem={({ item, index }) => {
-                const sel = selTag === index;
-                const rowBg = sel
-                  ? '#EFF6FF'
-                  : index % 2 === 0
-                    ? '#FFFFFF'
-                    : '#F8FAFC';
-                return (
-                  <TouchableOpacity
-                    className="flex-row border-b border-slate-100 items-center"
-                    style={{ backgroundColor: rowBg }}
-                    onPress={() => setSelTag(index)}
-                    activeOpacity={0.7}
-                  >
-                    {sel && (
-                      <View
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          bottom: 0,
-                          width: 3,
-                          backgroundColor: '#3B82F6',
-                          zIndex: 1,
-                        }}
-                      />
-                    )}
-                    {tagCols.map((col, ci) => (
-                      <Text
-                        key={ci}
-                        style={{ width: col.width }}
-                        className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
-                        numberOfLines={1}
-                      >
-                        {String(item[col.key] ?? '')}
-                      </Text>
-                    ))}
-                  </TouchableOpacity>
-                );
-              }}
+              keyExtractor={keyExtractorIndex}
+              renderItem={renderTagItem}
+              getItemLayout={getItemLayout}
             />
           </View>
         </ScrollView>

@@ -304,7 +304,10 @@ function IconBtn({
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 export default function DestructionScan() {
   const router = useRouter();
-  const { warehouse } = useLocalSearchParams<{ warehouse: string }>();
+  const { warehouse, warehouseLabel } = useLocalSearchParams<{
+    warehouse: string;
+    warehouseLabel: string;
+  }>();
 
   const [remark, setRemark] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -384,7 +387,7 @@ export default function DestructionScan() {
             style={{ fontSize: 10, fontWeight: '700', color: '#1D4ED8' }}
             numberOfLines={1}
           >
-            {warehouse ?? 'N/A'}
+            {warehouseLabel ?? 'N/A'}
           </Text>
         </View>
       </View>
@@ -524,7 +527,7 @@ export default function DestructionScan() {
           onPress={() =>
             router.push({
               pathname: '/DestroyRequest' as any,
-              params: { warehouse },
+              params: { warehouse: warehouseLabel },
             })
           }
           activeOpacity={0.8}
