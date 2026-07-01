@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CompactDropdown } from '../components/CompactDropdown';
 import { ShelfOption } from '../lib/checkin-service';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
@@ -80,95 +81,6 @@ const TAG_COLS_DEF = [
   { label: 'Size', key: 'Size' },
   { label: 'Carton', key: 'Carton' },
 ] as const;
-
-// ─── DROPDOWN ─────────────────────────────────────────────────
-function CompactDropdown({
-  value,
-  options,
-  onSelect,
-  loading,
-}: {
-  value: string;
-  options: ShelfOption[];
-  onSelect: (v: string) => void;
-  loading?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
-
-  return (
-    <View>
-      <TouchableOpacity
-        className="flex-row items-center bg-white border-2 border-slate-200 rounded-2xl px-3 h-11"
-        onPress={() => !loading && setOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Text
-          className="flex-1 text-sm font-medium text-slate-900"
-          numberOfLines={1}
-        >
-          {selectedLabel}
-        </Text>
-        {loading ? (
-          <ActivityIndicator size="small" color="#94A3B8" />
-        ) : (
-          <Feather name="chevron-down" size={15} color="#94A3B8" />
-        )}
-      </TouchableOpacity>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <TouchableOpacity
-          className="flex-1 bg-slate-900/40 justify-center items-center"
-          onPress={() => setOpen(false)}
-          activeOpacity={1}
-        >
-          <View className="bg-white rounded-3xl w-3/4 max-h-[55%] overflow-hidden shadow-xl">
-            <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-100">
-              <Text className="text-xs font-bold text-slate-400 tracking-widest uppercase">
-                Select Option
-              </Text>
-              <TouchableOpacity
-                onPress={() => setOpen(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Feather name="x" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.value}
-              renderItem={({ item }) => {
-                const sel = item.value === value;
-                return (
-                  <TouchableOpacity
-                    className={`flex-row justify-between items-center px-4 py-4 border-b border-slate-50 ${sel ? 'bg-blue-50' : ''}`}
-                    onPress={() => {
-                      onSelect(item.value);
-                      setOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      className={`text-[15px] ${sel ? 'font-bold text-blue-600' : 'font-medium text-slate-800'}`}
-                    >
-                      {item.label}
-                    </Text>
-                    {sel && <Feather name="check" size={16} color="#3B82F6" />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
-  );
-}
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 export default function CheckIn() {
@@ -397,6 +309,9 @@ export default function CheckIn() {
               options={shelves}
               onSelect={setShelf}
               loading={loadingShelves}
+              height={44}
+              borderRadius={16}
+              iconSize={15}
             />
           </View>
           <View className="flex-1">
@@ -408,6 +323,9 @@ export default function CheckIn() {
               options={cartons}
               onSelect={setCarton}
               loading={loadingCartons}
+              height={44}
+              borderRadius={16}
+              iconSize={15}
             />
           </View>
         </View>
@@ -418,7 +336,14 @@ export default function CheckIn() {
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
               No.
             </Text>
-            <CompactDropdown value={no} options={NO_OPTIONS} onSelect={setNo} />
+            <CompactDropdown
+              value={no}
+              options={NO_OPTIONS}
+              onSelect={setNo}
+              height={44}
+              borderRadius={16}
+              iconSize={15}
+            />
           </View>
 
           <View className="flex-1">

@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './slices/authSlice';
 import checkinReducer from './slices/checkinSlice';
 import checkoutReducer from './slices/checkoutSlice';
+import destroyRequestReducer from './slices/destroyRequestSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     checkin: checkinReducer,
     checkout: checkoutReducer,
+    destroyRequest: destroyRequestReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

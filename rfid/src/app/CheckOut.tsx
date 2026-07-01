@@ -19,6 +19,7 @@ import DateTimePicker, {
   useDefaultStyles,
 } from 'react-native-ui-datepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CompactDropdown } from '../components/CompactDropdown';
 import { DropdownOption, EpcData } from '../lib/checkout-service';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
@@ -72,97 +73,6 @@ const SCAN_COLS_DEF = [
   { label: 'Size', key: 'Size' },
   { label: 'ShoesType', key: 'ShoesType' },
 ] as const;
-
-// ─── COMPACT DROPDOWN ─────────────────────────────────────────
-function CompactDropdown({
-  value,
-  options,
-  onSelect,
-  placeholder,
-  loading,
-}: {
-  value: string;
-  options: DropdownOption[];
-  onSelect: (v: string) => void;
-  placeholder?: string;
-  loading?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
-
-  return (
-    <View>
-      <TouchableOpacity
-        className="flex-row items-center bg-white border-2 border-slate-200 rounded-xl px-3 h-10"
-        onPress={() => !loading && setOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Text
-          className={`flex-1 text-sm font-medium ${value ? 'text-slate-900' : 'text-slate-400'}`}
-          numberOfLines={1}
-        >
-          {value ? selectedLabel : (placeholder ?? 'Select...')}
-        </Text>
-        {loading ? (
-          <ActivityIndicator size="small" color="#94A3B8" />
-        ) : (
-          <Feather name="chevron-down" size={14} color="#94A3B8" />
-        )}
-      </TouchableOpacity>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <TouchableOpacity
-          className="flex-1 bg-slate-900/40 justify-center items-center"
-          onPress={() => setOpen(false)}
-          activeOpacity={1}
-        >
-          <View className="bg-white rounded-3xl w-3/4 max-h-[55%] overflow-hidden">
-            <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-100">
-              <Text className="text-xs font-bold text-slate-400 tracking-widest uppercase">
-                Select Option
-              </Text>
-              <TouchableOpacity
-                onPress={() => setOpen(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Feather name="x" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.value}
-              renderItem={({ item }) => {
-                const sel = item.value === value;
-                return (
-                  <TouchableOpacity
-                    className={`flex-row justify-between items-center px-4 py-4 border-b border-slate-50 ${sel ? 'bg-blue-50' : ''}`}
-                    onPress={() => {
-                      onSelect(item.value);
-                      setOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      className={`text-[15px] ${sel ? 'font-bold text-blue-600' : 'font-medium text-slate-800'}`}
-                    >
-                      {item.label}
-                    </Text>
-                    {sel && <Feather name="check" size={16} color="#3B82F6" />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
-  );
-}
 
 // ─── CHECKBOX ─────────────────────────────────────────────────
 function Checkbox({

@@ -88,14 +88,6 @@ export class CheckoutService {
       WHERE  LocationFrom = ${locationFrom.trim()}
             AND f.YN = 1
             AND l.YN = 1`;
-    console.log(`SELECT l.LocationName  AS [label]
-            ,f.LocationTo    AS [value]
-      FROM   SampleShoeInOut_LocationFlow f
-            LEFT JOIN SampleShoeInOut_Location l
-                  ON  l.LocationId = f.LocationTo
-      WHERE  LocationFrom = ${locationFrom.trim()}
-            AND f.YN = 1
-            AND l.YN = 1`);
     return rows;
   }
 

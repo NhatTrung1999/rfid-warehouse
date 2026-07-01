@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   FlatList,
-  Modal,
   ScrollView,
   StatusBar,
   Text,
@@ -12,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CompactDropdown } from '../components/CompactDropdown';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
 function calcColWidths<K extends string, T extends Record<K, unknown>>(
@@ -82,145 +82,6 @@ const SCAN_COLS_DEF = [
   { label: 'ScanOrder', key: 'ScanOrder' },
   { label: 'Export Time', key: 'ExportTime' },
 ] as const;
-
-// ─── COMPACT DROPDOWN ─────────────────────────────────────────
-function CompactDropdown({
-  value,
-  options,
-  onSelect,
-}: {
-  value: string;
-  options: string[];
-  onSelect: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      <TouchableOpacity
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: '#FFFFFF',
-          borderWidth: 2,
-          borderColor: '#E2E8F0',
-          borderRadius: 13,
-          paddingHorizontal: 12,
-          height: 38,
-        }}
-        onPress={() => setOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={{
-            flex: 1,
-            fontSize: 13,
-            fontWeight: '500',
-            color: value ? '#0F172A' : '#94A3B8',
-          }}
-          numberOfLines={1}
-        >
-          {value || 'Select...'}
-        </Text>
-        <Feather name="chevron-down" size={14} color="#94A3B8" />
-      </TouchableOpacity>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(15,23,42,0.4)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-          onPress={() => setOpen(false)}
-          activeOpacity={1}
-        >
-          <View
-            style={{
-              backgroundColor: 'white',
-              borderRadius: 24,
-              width: '75%',
-              maxHeight: '55%',
-              overflow: 'hidden',
-            }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                borderBottomWidth: 1,
-                borderColor: '#F1F5F9',
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '700',
-                  color: '#94A3B8',
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Select Option
-              </Text>
-              <TouchableOpacity
-                onPress={() => setOpen(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Feather name="x" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => {
-                const sel = item === value;
-                return (
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderColor: '#F8FAFC',
-                      backgroundColor: sel ? '#EFF6FF' : 'white',
-                    }}
-                    onPress={() => {
-                      onSelect(item);
-                      setOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: sel ? '700' : '500',
-                        color: sel ? '#2563EB' : '#1E293B',
-                      }}
-                    >
-                      {item}
-                    </Text>
-                    {sel && <Feather name="check" size={16} color="#3B82F6" />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
-  );
-}
 
 // ─── CHECKBOX ─────────────────────────────────────────────────
 function Checkbox({
@@ -504,39 +365,12 @@ export default function DestructionScan() {
               value={filter}
               options={FILTER_LIST}
               onSelect={setFilter}
+              height={38}
+              borderRadius={13}
+              fontSize={13}
             />
           </View>
         </View>
-
-        {/* Row 2b: Destroy Request (full width) */}
-        <TouchableOpacity
-          style={{
-            height: 38,
-            backgroundColor: '#DC2626',
-            borderRadius: 11,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            shadowColor: '#DC2626',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 4,
-            elevation: 3,
-          }}
-          onPress={() =>
-            router.push({
-              pathname: '/DestroyRequest' as any,
-              params: { warehouse: warehouseLabel },
-            })
-          }
-          activeOpacity={0.8}
-        >
-          <Feather name="alert-triangle" size={13} color="white" />
-          <Text style={{ fontSize: 13, fontWeight: '700', color: 'white' }}>
-            Destroy Request
-          </Text>
-        </TouchableOpacity>
 
         <View
           style={{

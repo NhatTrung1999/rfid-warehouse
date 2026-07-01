@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CheckinModule } from './modules/checkin/checkin.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
+import { DestroyRequestModule } from './modules/destroy-request/destroy-request.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CheckoutModule } from './modules/checkout/checkout.module';
     WarehouseModule,
     CheckinModule,
     CheckoutModule,
+    DestroyRequestModule,
   ],
   controllers: [AppController],
   providers: [

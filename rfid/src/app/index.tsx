@@ -20,6 +20,7 @@ const FUNCTIONS = [
   { label: 'Check In', value: 'CheckIn' },
   { label: 'Check Out', value: 'CheckOut' },
   { label: 'Destruction Scan', value: 'DestructionScan' },
+  { label: 'Destroy Request', value: 'DestroyRequest' },
 ];
 
 interface ModernSelectProps {

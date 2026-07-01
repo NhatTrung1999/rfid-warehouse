@@ -1,9 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
-  Modal,
   ScrollView,
   StatusBar,
   Text,
@@ -12,6 +11,18 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CompactDropdown } from '../components/CompactDropdown';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import {
+  fetchModelNames,
+  fetchStages,
+  fetchSeasons,
+  fetchCategories,
+  fetchArticles,
+  fetchFDs,
+  fetchNoticeNos,
+  fetchLocations,
+} from '../store/slices/destroyRequestSlice';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
 function calcColWidths<K extends string, T extends Record<K, unknown>>(
@@ -35,15 +46,18 @@ function calcColWidths<K extends string, T extends Record<K, unknown>>(
 }
 
 // ─── DỮ LIỆU MẪU ─────────────────────────────────────────────
-const MODEL_LIST = ['COPA PREMIERE', 'ULTRA 4D', 'NMD R1', 'STAN SMITH'];
-const STAGE_LIST = ['TS2', 'TS3', 'SMS', 'SMP'];
-const SEASON_LIST = ['FW25', 'SS25', 'FW24', 'SS24'];
-const CATEGORY_LIST = ['PDX(SKB)', 'HZO', 'Originals', 'Running', 'Casual'];
-const ARTICLE_LIST = ['JP6078', 'GY3438', 'FX5500', 'EE5721'];
-const FD_LIST = ['MY HANH', 'FD-02', 'FD-03'];
-const LOCATION_LIST = ['2F FG W/H', '3F FG W/H', '4F FG W/H', '2F MCS'];
-const STATUS_LIST = ['FD confirm', 'Pending', 'Confirmed', 'Rejected'];
-const NOTICE_LIST = ['122507723', '122507724', '122507725'];
+// STATUS chưa có API endpoint — giữ lại mock tạm
+const STATUS_LIST = [
+  'ALL',
+  'Pending Destroy',
+  'Sys pending destroy',
+  'FD confirm',
+  'Data Export',
+  'WH confirm',
+  'Destroy InProcess',
+  'Destroy Adopt',
+  'Keep',
+];
 
 const TABLE_DATA = [
   {
@@ -175,147 +189,6 @@ const TABLE_COLS_DEF = [
   { label: 'Reason', key: 'Reason' },
 ] as const;
 
-// ─── COMPACT DROPDOWN ─────────────────────────────────────────
-function CompactDropdown({
-  value,
-  options,
-  onSelect,
-  placeholder,
-}: {
-  value: string;
-  options: string[];
-  onSelect: (v: string) => void;
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      <TouchableOpacity
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: '#FFFFFF',
-          borderWidth: 2,
-          borderColor: '#E2E8F0',
-          borderRadius: 11,
-          paddingHorizontal: 10,
-          height: 34,
-        }}
-        onPress={() => setOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={{
-            flex: 1,
-            fontSize: 12,
-            fontWeight: '500',
-            color: value ? '#0F172A' : '#94A3B8',
-          }}
-          numberOfLines={1}
-        >
-          {value || placeholder || 'All'}
-        </Text>
-        <Feather name="chevron-down" size={13} color="#94A3B8" />
-      </TouchableOpacity>
-
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(15,23,42,0.4)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-          onPress={() => setOpen(false)}
-          activeOpacity={1}
-        >
-          <View
-            style={{
-              backgroundColor: 'white',
-              borderRadius: 24,
-              width: '75%',
-              maxHeight: '55%',
-              overflow: 'hidden',
-            }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                borderBottomWidth: 1,
-                borderColor: '#F1F5F9',
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '700',
-                  color: '#94A3B8',
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Select Option
-              </Text>
-              <TouchableOpacity
-                onPress={() => setOpen(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Feather name="x" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => {
-                const sel = item === value;
-                return (
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      borderBottomWidth: 1,
-                      borderColor: '#F8FAFC',
-                      backgroundColor: sel ? '#EFF6FF' : 'white',
-                    }}
-                    onPress={() => {
-                      onSelect(item);
-                      setOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: sel ? '700' : '500',
-                        color: sel ? '#2563EB' : '#1E293B',
-                      }}
-                    >
-                      {item}
-                    </Text>
-                    {sel && <Feather name="check" size={16} color="#3B82F6" />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
-  );
-}
-
 // ─── FIELD LABEL + CONTROL ────────────────────────────────────
 function FilterField({
   label,
@@ -385,20 +258,55 @@ function Checkbox({
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 export default function DestroyRequest() {
   const router = useRouter();
-  const { warehouse } = useLocalSearchParams<{ warehouse: string }>();
+  const { warehouse, warehouseLabel } = useLocalSearchParams<{
+    warehouse: string;
+    warehouseLabel: string;
+  }>();
+
+  const dispatch = useAppDispatch();
+  const {
+    modelNames,
+    loadingModelNames,
+    stages,
+    loadingStages,
+    seasons,
+    loadingSeasons,
+    categories,
+    loadingCategories,
+    articles,
+    loadingArticles,
+    fds,
+    loadingFDs,
+    noticeNos,
+    loadingNoticeNos,
+    locations,
+    loadingLocations,
+  } = useAppSelector((state) => state.destroyRequest);
 
   // filter state
   const [epc, setEpc] = useState('');
-  const [model, setModel] = useState('');
-  const [stage, setStage] = useState('');
-  const [season, setSeason] = useState('');
-  const [category, setCategory] = useState('');
-  const [article, setArticle] = useState('');
-  const [fd, setFd] = useState('');
-  const [location, setLocation] = useState(LOCATION_LIST[0]);
-  const [status, setStatus] = useState('');
-  const [noticeNo, setNoticeNo] = useState('');
+  const [model, setModel] = useState<string[]>([]);
+  const [stage, setStage] = useState<string[]>([]);
+  const [season, setSeason] = useState<string[]>([]);
+  const [category, setCategory] = useState<string[]>([]);
+  const [article, setArticle] = useState<string[]>([]);
+  const [fd, setFd] = useState<string[]>([]);
+  const [location, setLocation] = useState<string[]>([]);
+  const [status, setStatus] = useState<string[]>([]);
+  const [noticeNo, setNoticeNo] = useState<string[]>([]);
   const [checkAll, setCheckAll] = useState(false);
+
+  // API data
+  useEffect(() => {
+    dispatch(fetchModelNames());
+    dispatch(fetchStages());
+    dispatch(fetchSeasons());
+    dispatch(fetchCategories());
+    dispatch(fetchArticles());
+    dispatch(fetchFDs());
+    dispatch(fetchNoticeNos());
+    dispatch(fetchLocations());
+  }, [dispatch]);
 
   // table
   const [selRow, setSelRow] = useState<number | null>(0);
@@ -490,7 +398,7 @@ export default function DestroyRequest() {
             style={{ fontSize: 10, fontWeight: '700', color: '#1D4ED8' }}
             numberOfLines={1}
           >
-            {warehouse ?? 'N/A'}
+            {warehouseLabel || warehouse || 'N/A'}
           </Text>
         </View>
       </View>
@@ -546,23 +454,50 @@ export default function DestroyRequest() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <FilterField label="Model Name">
             <CompactDropdown
+              multiple
+              creatable
               value={model}
-              options={MODEL_LIST}
+              options={modelNames}
               onSelect={setModel}
+              loading={loadingModelNames}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
           <FilterField label="Stage">
             <CompactDropdown
+              multiple
+              creatable
               value={stage}
-              options={STAGE_LIST}
+              options={stages}
               onSelect={setStage}
+              loading={loadingStages}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
           <FilterField label="Season">
             <CompactDropdown
+              multiple
+              creatable
               value={season}
-              options={SEASON_LIST}
+              options={seasons}
               onSelect={setSeason}
+              loading={loadingSeasons}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
         </View>
@@ -571,20 +506,51 @@ export default function DestroyRequest() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <FilterField label="Category">
             <CompactDropdown
+              multiple
+              creatable
               value={category}
-              options={CATEGORY_LIST}
+              options={categories}
               onSelect={setCategory}
+              loading={loadingCategories}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
           <FilterField label="Article">
             <CompactDropdown
+              multiple
+              creatable
               value={article}
-              options={ARTICLE_LIST}
+              options={articles}
               onSelect={setArticle}
+              loading={loadingArticles}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
           <FilterField label="FD">
-            <CompactDropdown value={fd} options={FD_LIST} onSelect={setFd} />
+            <CompactDropdown
+              multiple
+              creatable
+              value={fd}
+              options={fds}
+              onSelect={setFd}
+              loading={loadingFDs}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
+            />
           </FilterField>
         </View>
 
@@ -592,23 +558,48 @@ export default function DestroyRequest() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <FilterField label="Location">
             <CompactDropdown
+              multiple
+              creatable
               value={location}
-              options={LOCATION_LIST}
+              options={locations}
               onSelect={setLocation}
+              loading={loadingLocations}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
           <FilterField label="Status">
             <CompactDropdown
+              multiple
               value={status}
               options={STATUS_LIST}
               onSelect={setStatus}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
           <FilterField label="Notice No">
             <CompactDropdown
+              multiple
+              creatable
               value={noticeNo}
-              options={NOTICE_LIST}
+              options={noticeNos}
               onSelect={setNoticeNo}
+              loading={loadingNoticeNos}
+              placeholder="All"
+              height={34}
+              borderRadius={11}
+              paddingHorizontal={10}
+              fontSize={12}
+              iconSize={13}
             />
           </FilterField>
         </View>
