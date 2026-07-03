@@ -23,11 +23,12 @@ import { CompactDropdown } from '../components/CompactDropdown';
 import { DropdownOption, EpcData } from '../lib/checkout-service';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
+  clearError,
+  clearEpcs,
   fetchFrom,
   fetchTo,
   fetchShelf,
   fetchEPC,
-  clearEpcs,
 } from '../store/slices/checkoutSlice';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
@@ -259,12 +260,18 @@ export default function CheckOut() {
   const [selRow, setSelRow] = useState<number | null>(null);
   const [location, setLocation] = useState('');
 
-  // ── Load From khi warehouse thay đổi ──
+  // ── Reset và load dữ liệu ban đầu khi warehouse thay đổi ──
   useEffect(() => {
     if (!warehouse) return;
     setFrom('');
+    setTo('');
+    setShelf('');
+    setNo('');
+    setSelRow(null);
+    dispatch(clearEpcs());
     dispatch(fetchFrom(warehouse));
-  }, [warehouse]);
+    dispatch(fetchShelf(warehouse));
+  }, [dispatch, warehouse]);
 
   useEffect(() => {
     if (fromOptions.length > 0) setFrom(fromOptions[0].value);
@@ -275,27 +282,21 @@ export default function CheckOut() {
     if (!from) return;
     setTo('');
     dispatch(fetchTo(from));
-  }, [from]);
+  }, [dispatch, from]);
 
   useEffect(() => {
     if (toOptions.length > 0) setTo(toOptions[0].value);
   }, [toOptions]);
-
-  // ── Load Shelf khi warehouse thay đổi ──
-  useEffect(() => {
-    if (!warehouse) return;
-    setShelf('');
-    dispatch(fetchShelf(warehouse));
-  }, [warehouse]);
-
   useEffect(() => {
     if (shelfOptions.length > 0) setShelf(shelfOptions[0].value);
   }, [shelfOptions]);
 
   // ── Hiển thị lỗi ──
   useEffect(() => {
-    if (error) Alert.alert('Lỗi', error);
-  }, [error]);
+    if (!error) return;
+    Alert.alert('Lỗi', error);
+    dispatch(clearError());
+  }, [dispatch, error]);
 
   // ── RFID callback ──
   const onTagScanned = useCallback(

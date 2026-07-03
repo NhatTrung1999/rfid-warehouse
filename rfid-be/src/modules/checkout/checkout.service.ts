@@ -13,6 +13,7 @@ export interface EpcRawData {
   Category: string;
   NoticeNo: string;
   CartonNumber: string;
+  Action: string;
   PH: string;
   Article: string;
   FD: string;
@@ -36,6 +37,7 @@ export interface EpcFormatData {
   Category: string;
   NoticeNo: string;
   CartonNumber: string;
+  Action: string;
   PH: string;
   Article: string;
   FD: string;
@@ -330,6 +332,7 @@ export class CheckoutService {
       Category: row.Category,
       NoticeNo: row.NoticeNo,
       CartonNumber: row.CartonNumber,
+      Action: '',
       PH: row.PH,
       Article: row.Article,
       FD: row.FD,

@@ -1,4 +1,4 @@
-import { apiClient } from './api-client';
+import { apiClient } from "./api-client";
 
 export interface ShelfOption {
   label: string;
@@ -35,6 +35,18 @@ export interface ScanData {
   Size: string;
 }
 
+export interface CheckEpcData {
+  DeliverNO: string;
+  Qty: number;
+  LocationTo: string;
+}
+
+export interface CartonNumberData {
+  ShelfId: string;
+  CartonNumberOnly: string;
+  NoOnly: string;
+  CartonNumber: string;
+}
 export const checkinService = {
   async getShelves(locationId: string): Promise<ShelfOption[]> {
     return apiClient.get<ShelfOption[]>(
@@ -57,6 +69,17 @@ export const checkinService = {
   async getScanData(deliveryNo: string): Promise<ScanData[]> {
     return apiClient.get<ScanData[]>(
       `/checkin/scan?deliveryNo=${encodeURIComponent(deliveryNo)}`,
+    );
+  },
+  async checkEpc(epc: string): Promise<CheckEpcData | null> {
+    return apiClient.get<CheckEpcData | null>(
+      `/checkin/check-epc?epc=${encodeURIComponent(epc)}`,
+    );
+  },
+
+  async getCartonNumber(epc: string): Promise<CartonNumberData | null> {
+    return apiClient.get<CartonNumberData | null>(
+      `/checkin/carton-number?epc=${encodeURIComponent(epc)}`,
     );
   },
 };

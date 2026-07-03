@@ -79,6 +79,9 @@ const checkoutSlice = createSlice({
     builder
       .addCase(fetchFrom.pending, (state) => {
         state.loadingFrom = true;
+        state.fromOptions = [];
+        state.toOptions = [];
+        state.epcs = [];
         state.error = null;
       })
       .addCase(
@@ -90,6 +93,7 @@ const checkoutSlice = createSlice({
       )
       .addCase(fetchFrom.rejected, (state, action) => {
         state.loadingFrom = false;
+        state.fromOptions = [];
         state.error = action.error.message ?? 'Không thể tải danh sách From';
       });
 
@@ -97,6 +101,7 @@ const checkoutSlice = createSlice({
     builder
       .addCase(fetchTo.pending, (state) => {
         state.loadingTo = true;
+        state.toOptions = [];
         state.error = null;
       })
       .addCase(
@@ -108,6 +113,7 @@ const checkoutSlice = createSlice({
       )
       .addCase(fetchTo.rejected, (state, action) => {
         state.loadingTo = false;
+        state.toOptions = [];
         state.error = action.error.message ?? 'Không thể tải danh sách To';
       });
 
@@ -115,6 +121,7 @@ const checkoutSlice = createSlice({
     builder
       .addCase(fetchShelf.pending, (state) => {
         state.loadingShelf = true;
+        state.shelfOptions = [];
         state.error = null;
       })
       .addCase(
@@ -126,6 +133,7 @@ const checkoutSlice = createSlice({
       )
       .addCase(fetchShelf.rejected, (state, action) => {
         state.loadingShelf = false;
+        state.shelfOptions = [];
         state.error = action.error.message ?? 'Không thể tải danh sách Shelf';
       });
 
@@ -133,6 +141,7 @@ const checkoutSlice = createSlice({
     builder
       .addCase(fetchEPC.pending, (state) => {
         state.loadingEpcs = true;
+        state.epcs = [];
         state.error = null;
       })
       .addCase(
@@ -144,6 +153,7 @@ const checkoutSlice = createSlice({
       )
       .addCase(fetchEPC.rejected, (state, action) => {
         state.loadingEpcs = false;
+        state.epcs = [];
         state.error = action.error.message ?? 'Không thể tải dữ liệu EPC';
       });
   },

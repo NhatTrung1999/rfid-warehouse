@@ -1,6 +1,5 @@
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Feather } from "@expo/vector-icons";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,10 +11,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppDispatch } from '../store/hooks';
-import { login } from '../store/slices/authSlice';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAppDispatch } from "../store/hooks";
+import { login } from "../store/slices/authSlice";
 
 interface InputFieldProps {
   label: string;
@@ -24,7 +23,7 @@ interface InputFieldProps {
   placeholder: string;
   icon: keyof typeof Feather.glyphMap;
   secureTextEntry?: boolean;
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }
 
 function InputField({
@@ -34,7 +33,7 @@ function InputField({
   placeholder,
   icon,
   secureTextEntry,
-  autoCapitalize = 'none',
+  autoCapitalize = "none",
 }: InputFieldProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -49,10 +48,10 @@ function InputField({
 
       <View
         className={`bg-white border-2 rounded-2xl px-4 flex-row items-center ${
-          active ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'
+          active ? "border-blue-400 bg-blue-50/50" : "border-slate-200"
         }`}
       >
-        <Feather name={icon} size={20} color={active ? '#3B82F6' : '#94A3B8'} />
+        <Feather name={icon} size={20} color={active ? "#3B82F6" : "#94A3B8"} />
 
         <TextInput
           className="flex-1 py-4 px-3 text-base font-medium text-slate-900"
@@ -73,7 +72,7 @@ function InputField({
             hitSlop={8}
           >
             <Feather
-              name={showPassword ? 'eye-off' : 'eye'}
+              name={showPassword ? "eye-off" : "eye"}
               size={20}
               color="#94A3B8"
             />
@@ -85,12 +84,19 @@ function InputField({
 }
 
 export default function LoginScreen() {
-  const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const isReady = username.trim().length > 0 && password.length > 0;
 
@@ -100,13 +106,12 @@ export default function LoginScreen() {
     setIsSubmitting(true);
     try {
       await dispatch(login({ username: username.trim(), password })).unwrap();
-      router.replace('/');
     } catch (error) {
       const message =
-        typeof error === 'string' ? error : 'Không thể kết nối tới máy chủ';
-      Alert.alert('Đăng nhập thất bại', message);
+        typeof error === "string" ? error : "Không thể kết nối tới máy chủ";
+      Alert.alert("Đăng nhập thất bại", message);
     } finally {
-      setIsSubmitting(false);
+      if (isMountedRef.current) setIsSubmitting(false);
     }
   };
 
@@ -116,10 +121,10 @@ export default function LoginScreen() {
 
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
           keyboardShouldPersistTaps="handled"
         >
           <View className="px-6 py-10">
@@ -161,18 +166,18 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[
                 {
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  alignItems: "center",
+                  justifyContent: "center",
                   paddingVertical: 16,
                   borderRadius: 16,
-                  flexDirection: 'row',
+                  flexDirection: "row",
                   marginTop: 8,
                 },
                 !isReady || isSubmitting
-                  ? { backgroundColor: '#94A3B8' }
+                  ? { backgroundColor: "#94A3B8" }
                   : {
-                      backgroundColor: '#3B82F6',
-                      shadowColor: '#3B82F6',
+                      backgroundColor: "#3B82F6",
+                      shadowColor: "#3B82F6",
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.3,
                       shadowRadius: 8,

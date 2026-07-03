@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { logout } from '../store/slices/authSlice';
+import { ApiError } from '../lib/api-client';
 import { warehousesService, Warehouse } from '../lib/warehouses-service';
 
 const FUNCTIONS = [
@@ -152,12 +153,41 @@ export default function IndexScreen() {
   const isReady = selectedFunc && selectedWarehouse;
 
   useEffect(() => {
-    warehousesService
-      .getWarehouses()
-      .then(setWarehouses)
-      .catch(() => Alert.alert('Lỗi', 'Không thể tải danh sách kho'))
-      .finally(() => setLoadingWarehouses(false));
-  }, []);
+    if (!user) {
+      setWarehouses([]);
+      setLoadingWarehouses(false);
+      return;
+    }
+
+    let isMounted = true;
+    let authFailed = false;
+
+    const loadWarehouses = async () => {
+      setLoadingWarehouses(true);
+      try {
+        const data = await warehousesService.getWarehouses();
+        if (isMounted) setWarehouses(data);
+      } catch (error) {
+        if (error instanceof ApiError && error.statusCode === 401) {
+          authFailed = true;
+          dispatch(logout());
+          return;
+        }
+
+        const message =
+          error instanceof ApiError ? error.message : 'Không thể tải danh sách kho';
+        if (isMounted) Alert.alert('Lỗi', message);
+      } finally {
+        if (isMounted && !authFailed) setLoadingWarehouses(false);
+      }
+    };
+
+    loadWarehouses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, user]);
 
   const handleConfirm = () => {
     if (!isReady) {

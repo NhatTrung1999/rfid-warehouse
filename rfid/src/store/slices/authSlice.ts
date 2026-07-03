@@ -7,7 +7,6 @@ interface AuthState {
   user: StoredUser | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
-  // true khi đang đọc session đã lưu lúc app mới mở (chưa biết đã login chưa)
   isBootstrapping: boolean;
 }
 
@@ -18,7 +17,6 @@ const initialState: AuthState = {
   isBootstrapping: true,
 };
 
-// Khi app mở lại, đọc session đã lưu trong SecureStore (nếu có)
 export const bootstrapAuth = createAsyncThunk('auth/bootstrap', async () => {
   return authService.getCurrentUser();
 });

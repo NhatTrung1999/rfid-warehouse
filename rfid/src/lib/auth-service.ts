@@ -49,7 +49,15 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<StoredUser | null> {
-    return tokenStorage.getUser();
+    const storedUser = await tokenStorage.getUser();
+    if (!storedUser) return null;
+
+    try {
+      return await apiClient.get<StoredUser>('/auth/profile');
+    } catch {
+      await tokenStorage.clearSession();
+      return null;
+    }
   },
 
   async isAuthenticated(): Promise<boolean> {

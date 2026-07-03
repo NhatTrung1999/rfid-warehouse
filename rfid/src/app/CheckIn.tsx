@@ -1,29 +1,33 @@
-import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Feather } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { CompactDropdown } from '../components/CompactDropdown';
-import { ShelfOption } from '../lib/checkin-service';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { CompactDropdown } from "../components/CompactDropdown";
+import { checkinService, ShelfOption } from "../lib/checkin-service";
+import { rfidNative } from "../lib/rfid-native";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
 import {
+  clearError,
   clearTags,
   fetchCartons,
   fetchDeliveries,
   fetchShelves,
   fetchTags,
-} from '../store/slices/checkinSlice';
+} from "../store/slices/checkinSlice";
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
 function calcColWidths<K extends string, T extends Record<K, unknown>>(
@@ -35,7 +39,7 @@ function calcColWidths<K extends string, T extends Record<K, unknown>>(
 ) {
   return cols.map((col) => {
     const maxDataLen = data.reduce((max, row) => {
-      const val = String(row[col.key] ?? '');
+      const val = String(row[col.key] ?? "");
       return Math.max(max, val.length);
     }, 0);
     const width = Math.max(
@@ -48,39 +52,62 @@ function calcColWidths<K extends string, T extends Record<K, unknown>>(
 
 // ─── CONSTANTS ────────────────────────────────────────────────
 
-const NO_OPTIONS: ShelfOption[] = Array.from({ length: 10 }, (_, i) => ({
-  label: String(i + 1),
-  value: String(i + 1),
-}));
+const NO_OPTIONS: ShelfOption[] = [
+  { label: "1", value: "1" },
+  { label: "2", value: "2" },
+];
+
+const PH_OPTIONS: ShelfOption[] = [
+  { label: "", value: "" },
+  { label: "Punch hole", value: "Punch hole" },
+  { label: "Not punch hole", value: "Not punch hole" },
+];
 
 const HIST_COLS_DEF = [
-  { label: 'DeliverNO', key: 'DeliverNO' },
-  { label: 'From', key: 'From' },
-  { label: 'To', key: 'To' },
-  { label: 'Deliver Person', key: 'DeliverPerson' },
-  { label: 'Quant', key: 'Quant' },
-  { label: 'Account', key: 'Account' },
-  { label: 'Date', key: 'Date' },
-  { label: 'Remark', key: 'Remark' },
-  { label: 'Purpose', key: 'Purpose' },
+  { label: "DeliverNO", key: "DeliverNO" },
+  { label: "From", key: "From" },
+  { label: "To", key: "To" },
+  { label: "Deliver Person", key: "DeliverPerson" },
+  { label: "Quant", key: "Quant" },
+  { label: "Account", key: "Account" },
+  { label: "Date", key: "Date" },
+  { label: "Remark", key: "Remark" },
+  { label: "Purpose", key: "Purpose" },
 ] as const;
 
 const TAG_COLS_DEF = [
-  { label: 'Scan', key: 'Scan' },
-  { label: 'EPC', key: 'EPC' },
-  { label: 'PH', key: 'PH' },
-  { label: 'Note', key: 'Note' },
-  { label: 'Notice No', key: 'NoticeNo' },
-  { label: 'SerialNo', key: 'SerialNo' },
-  { label: 'Article', key: 'Article' },
-  { label: 'FD', key: 'FD' },
-  { label: 'DevTp', key: 'DevTp' },
-  { label: 'Stage', key: 'Stage' },
-  { label: 'Season', key: 'Season' },
-  { label: 'ShoesType', key: 'ShoesType' },
-  { label: 'Size', key: 'Size' },
-  { label: 'Carton', key: 'Carton' },
+  { label: "Scan", key: "Scan" },
+  { label: "EPC", key: "EPC" },
+  { label: "PH", key: "PH" },
+  { label: "Note", key: "Note" },
+  { label: "Notice No", key: "NoticeNo" },
+  { label: "SerialNo", key: "SerialNo" },
+  { label: "Article", key: "Article" },
+  { label: "FD", key: "FD" },
+  { label: "DevTp", key: "DevTp" },
+  { label: "Stage", key: "Stage" },
+  { label: "Season", key: "Season" },
+  { label: "ShoesType", key: "ShoesType" },
+  { label: "Size", key: "Size" },
+  { label: "Carton", key: "Carton" },
 ] as const;
+
+function normalizePhValue(value?: string | null) {
+  const normalized = normalizeEpc(value).replace(/\s+/g, " ");
+  if (!normalized) return "";
+  if (normalized === "PUNCH HOLE") return "Punch hole";
+  if (normalized === "NOT PUNCH HOLE") return "Not punch hole";
+  return "";
+}
+
+function isPunchHoleValue(value?: string | null) {
+  return normalizePhValue(value) === "Punch hole";
+}
+function normalizeEpc(value?: string | null) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
+}
 
 // ─── MAIN SCREEN ──────────────────────────────────────────────
 export default function CheckIn() {
@@ -105,19 +132,43 @@ export default function CheckIn() {
   } = useAppSelector((state) => state.checkin);
 
   // ── UI-only local state ──
-  const [shelf, setShelf] = useState('');
-  const [carton, setCarton] = useState('');
-  const [no, setNo] = useState('1');
+  const [shelf, setShelf] = useState("");
+  const [carton, setCarton] = useState("");
+  const [no, setNo] = useState("1");
   const [punchHole, setPunchHole] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanStarting, setScanStarting] = useState(false);
+  const [scannedEpcs, setScannedEpcs] = useState<Set<string>>(() => new Set());
+  const [cartonsByEpc, setCartonsByEpc] = useState<Record<string, string>>({});
+  const [phByEpc, setPhByEpc] = useState<Record<string, string>>({});
+  const [notesByEpc, setNotesByEpc] = useState<Record<string, string>>({});
+  const tagSubscriptionRef = useRef<{ remove: () => void } | null>(null);
+  const tagEpcsRef = useRef<Set<string>>(new Set());
+  const scannedEpcsRef = useRef<Set<string>>(new Set());
+  const checkingEpcsRef = useRef<Set<string>>(new Set());
+  const notifiedEpcsRef = useRef<Set<string>>(new Set());
+  const isMountedRef = useRef(false);
   const [selDelivery, setSelDelivery] = useState<number | null>(null);
   const [selTag, setSelTag] = useState<number | null>(null);
 
-  // ── Load shelves khi warehouse thay đổi ──
+  // ── Load dữ liệu ban đầu khi warehouse thay đổi ──
   useEffect(() => {
     if (!warehouse) return;
+    setShelf("");
+    setCarton("");
+    setSelDelivery(null);
+    setSelTag(null);
+    setScannedEpcs(new Set());
+    setCartonsByEpc({});
+    setPhByEpc({});
+
+    setNotesByEpc({});
+    scannedEpcsRef.current = new Set();
+    checkingEpcsRef.current.clear();
+    notifiedEpcsRef.current.clear();
+    dispatch(clearTags());
     dispatch(fetchShelves(warehouse));
-  }, [warehouse]);
+  }, [dispatch, warehouse]);
 
   // ── Set shelf mặc định khi shelves load xong ──
   useEffect(() => {
@@ -127,9 +178,9 @@ export default function CheckIn() {
   // ── Load cartons khi shelf thay đổi ──
   useEffect(() => {
     if (!shelf) return;
-    setCarton('');
+    setCarton("");
     dispatch(fetchCartons(shelf));
-  }, [shelf]);
+  }, [dispatch, shelf]);
 
   // ── Set carton mặc định khi cartons load xong ──
   useEffect(() => {
@@ -141,31 +192,261 @@ export default function CheckIn() {
     if (!warehouse) return;
     setSelDelivery(null);
     dispatch(fetchDeliveries(warehouse));
-  }, [warehouse]);
+  }, [dispatch, warehouse]);
 
   // ── Load tags khi chọn delivery ──
   useEffect(() => {
     if (selDelivery === null) {
+      setScannedEpcs(new Set());
+      setCartonsByEpc({});
+      setPhByEpc({});
+
+      setNotesByEpc({});
+      scannedEpcsRef.current = new Set();
+      checkingEpcsRef.current.clear();
+      notifiedEpcsRef.current.clear();
       dispatch(clearTags());
       return;
     }
     const deliveryNo = deliveries[selDelivery]?.DeliverNO;
     if (!deliveryNo) return;
     setSelTag(null);
+    setScannedEpcs(new Set());
+    setCartonsByEpc({});
+    setPhByEpc({});
+
+    setNotesByEpc({});
+    scannedEpcsRef.current = new Set();
+    checkingEpcsRef.current.clear();
+    notifiedEpcsRef.current.clear();
     dispatch(fetchTags(deliveryNo));
-  }, [selDelivery]);
+  }, [deliveries, dispatch, selDelivery]);
 
   // ── Hiển thị lỗi từ Redux ──
   useEffect(() => {
-    if (error) Alert.alert('Lỗi', error);
-  }, [error]);
+    if (!error) return;
+    Alert.alert("Lỗi", error);
+    dispatch(clearError());
+  }, [dispatch, error]);
 
+  useEffect(() => {
+    tagEpcsRef.current = new Set(
+      tags.map((tag) => normalizeEpc(tag.EPC)).filter(Boolean),
+    );
+  }, [tags]);
+
+  useEffect(() => {
+    scannedEpcsRef.current = scannedEpcs;
+  }, [scannedEpcs]);
+
+  const notifyOnce = useCallback(
+    (key: string, title: string, message: string) => {
+      if (!isMountedRef.current || notifiedEpcsRef.current.has(key)) return;
+      notifiedEpcsRef.current.add(key);
+      Alert.alert(title, message);
+    },
+    [],
+  );
+
+  const handleTagRead = useCallback(
+    async (epc: string) => {
+      if (scannedEpcsRef.current.has(epc) || checkingEpcsRef.current.has(epc)) {
+        console.log("[RFID] duplicate EPC:", epc);
+        return;
+      }
+
+      checkingEpcsRef.current.add(epc);
+      try {
+        const result = await checkinService.checkEpc(epc);
+        if (!isMountedRef.current) return;
+        console.log("[RFID] check EPC result:", epc, result);
+
+        if (!result) {
+          notifyOnce(
+            `missing:${epc}`,
+            "Không tìm thấy EPC",
+            `EPC ${epc} không có trong danh sách cần check-in.`,
+          );
+          return;
+        }
+
+        const selectedDeliveryNo =
+          selDelivery === null ? null : deliveries[selDelivery]?.DeliverNO;
+        if (selectedDeliveryNo && result.DeliverNO !== selectedDeliveryNo) {
+          notifyOnce(
+            `delivery:${epc}:${result.DeliverNO}`,
+            "EPC thuộc delivery khác",
+            `EPC ${epc} thuộc delivery ${result.DeliverNO}.`,
+          );
+          return;
+        }
+
+        if (!tagEpcsRef.current.has(epc)) {
+          notifyOnce(
+            `not-loaded:${epc}`,
+            "EPC chưa có trong bảng",
+            `EPC ${epc} hợp lệ nhưng chưa có trong delivery đang hiển thị. Vui lòng tải lại delivery.`,
+          );
+          return;
+        }
+
+        let cartonNumber = "";
+        try {
+          const cartonInfo = await checkinService.getCartonNumber(epc);
+          if (!isMountedRef.current) return;
+          cartonNumber = cartonInfo?.CartonNumber?.trim() ?? "";
+          console.log("[RFID] carton number result:", epc, cartonInfo);
+        } catch (error) {
+          console.log("[RFID] get carton number failed:", epc, error);
+        }
+
+        if (!isMountedRef.current) return;
+        if (cartonNumber) {
+          setCartonsByEpc((prev) =>
+            prev[epc] === cartonNumber
+              ? prev
+              : { ...prev, [epc]: cartonNumber },
+          );
+        }
+        setScannedEpcs((prev) => {
+          if (prev.has(epc)) return prev;
+          const next = new Set(prev);
+          next.add(epc);
+          scannedEpcsRef.current = next;
+          return next;
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Không thể kiểm tra EPC";
+        notifyOnce(`error:${epc}`, "Không thể kiểm tra EPC", message);
+      } finally {
+        checkingEpcsRef.current.delete(epc);
+      }
+    },
+    [deliveries, notifyOnce, selDelivery],
+  );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      tagSubscriptionRef.current?.remove();
+      tagSubscriptionRef.current = null;
+      if (!rfidNative.isAvailable()) return;
+      try {
+        rfidNative.stopScan();
+        console.log("[RFID] scan stopped");
+      } catch {}
+      rfidNative.disconnect().catch(() => undefined);
+    };
+  }, []);
+
+  const stopPdaScan = useCallback(() => {
+    if (rfidNative.isAvailable()) {
+      try {
+        rfidNative.stopScan();
+        console.log("[RFID] scan stopped");
+      } catch {}
+    }
+    tagSubscriptionRef.current?.remove();
+    tagSubscriptionRef.current = null;
+    if (isMountedRef.current) setScanning(false);
+  }, []);
+
+  const startPdaScan = useCallback(async () => {
+    if (scanStarting || scanning) return;
+
+    if (!rfidNative.isAvailable()) {
+      console.log(
+        "[RFID] native module unavailable. Use Android PDA APK/dev build, not Expo Go.",
+      );
+      Alert.alert(
+        "Không có RFID native",
+        "Chức năng scan EPC thật chỉ chạy trên APK/dev build cài trên PDA Android.",
+      );
+      return;
+    }
+
+    if (tags.length === 0) {
+      Alert.alert("Chưa có dữ liệu", "Vui lòng chọn delivery trước khi scan.");
+      return;
+    }
+
+    if (!isMountedRef.current) return;
+    setScanStarting(true);
+    try {
+      const connectResult = await rfidNative.connect();
+      if (!isMountedRef.current) return;
+      console.log("[RFID] connected:", connectResult);
+      tagSubscriptionRef.current?.remove();
+      tagSubscriptionRef.current = rfidNative.addTagListener((event) => {
+        if (!isMountedRef.current) return;
+        console.log("[RFID] raw event:", event);
+        const epc = normalizeEpc(event.epc);
+        if (!epc) return;
+        console.log("[RFID] scanned EPC:", epc);
+        void handleTagRead(epc);
+      });
+      rfidNative.startScan();
+      if (!isMountedRef.current) return;
+      console.log("[RFID] scan started");
+      setScanning(true);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Không thể kết nối máy scan RFID";
+      if (isMountedRef.current) Alert.alert("Không thể scan", message);
+      tagSubscriptionRef.current?.remove();
+      tagSubscriptionRef.current = null;
+      try {
+        rfidNative.stopScan();
+        console.log("[RFID] scan stopped");
+      } catch {}
+      if (isMountedRef.current) setScanning(false);
+    } finally {
+      if (isMountedRef.current) setScanStarting(false);
+    }
+  }, [handleTagRead, scanStarting, scanning, tags]);
+  const handlePunchHoleChange = useCallback(
+    (value: boolean) => {
+      setPunchHole(value);
+      if (!value || selTag === null) return;
+
+      const epc = normalizeEpc(tags[selTag]?.EPC);
+      if (!epc) return;
+
+      setPhByEpc((prev) => ({
+        ...prev,
+        [epc]: "Punch hole",
+      }));
+    },
+    [selTag, tags],
+  );
   // ── Tính width động theo nội dung thực tế ──
   const histCols = useMemo(
     () => calcColWidths(HIST_COLS_DEF, deliveries),
     [deliveries],
   );
-  const tagCols = useMemo(() => calcColWidths(TAG_COLS_DEF, tags), [tags]);
+  const displayTags = useMemo(
+    () =>
+      tags.map((tag) => {
+        const epc = normalizeEpc(tag.EPC);
+        return {
+          ...tag,
+          Scan: scannedEpcs.has(epc) ? "✓" : tag.Scan,
+          PH: phByEpc[epc] ?? normalizePhValue(tag.PH),
+          Note: notesByEpc[epc] ?? tag.Note,
+          Carton: cartonsByEpc[epc] ?? tag.Carton,
+        };
+      }),
+    [cartonsByEpc, notesByEpc, phByEpc, scannedEpcs, tags],
+  );
+  const scannedCount = scannedEpcs.size;
+  const tagCols = useMemo(
+    () => calcColWidths(TAG_COLS_DEF, displayTags),
+    [displayTags],
+  );
 
   // ── FlatList optimizations ──
   const ROW_HEIGHT = 36;
@@ -182,7 +463,7 @@ export default function CheckIn() {
   const renderDeliveryItem = useCallback(
     ({ item, index }: { item: (typeof deliveries)[0]; index: number }) => {
       const sel = selDelivery === index;
-      const rowBg = sel ? '#EFF6FF' : index % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      const rowBg = sel ? "#EFF6FF" : index % 2 === 0 ? "#FFFFFF" : "#F8FAFC";
       return (
         <TouchableOpacity
           className="flex-row border-b border-slate-100 items-center"
@@ -193,12 +474,12 @@ export default function CheckIn() {
           {sel && (
             <View
               style={{
-                position: 'absolute',
+                position: "absolute",
                 left: 0,
                 top: 0,
                 bottom: 0,
                 width: 3,
-                backgroundColor: '#3B82F6',
+                backgroundColor: "#3B82F6",
                 zIndex: 1,
               }}
             />
@@ -207,10 +488,10 @@ export default function CheckIn() {
             <Text
               key={ci}
               style={{ width: col.width }}
-              className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
+              className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? "text-blue-700 font-semibold" : "text-slate-600 font-normal"}`}
               numberOfLines={1}
             >
-              {String(item[col.key] ?? '')}
+              {String(item[col.key] ?? "")}
             </Text>
           ))}
         </TouchableOpacity>
@@ -220,354 +501,451 @@ export default function CheckIn() {
   );
 
   const renderTagItem = useCallback(
-    ({ item, index }: { item: (typeof tags)[0]; index: number }) => {
+    ({ item, index }: { item: (typeof displayTags)[0]; index: number }) => {
       const sel = selTag === index;
-      const rowBg = sel ? '#EFF6FF' : index % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      const isScanned = scannedEpcs.has(normalizeEpc(item.EPC));
+      const rowBg = isScanned
+        ? sel
+          ? "#D1FAE5"
+          : "#ECFDF5"
+        : sel
+          ? "#EFF6FF"
+          : index % 2 === 0
+            ? "#FFFFFF"
+            : "#F8FAFC";
       return (
         <TouchableOpacity
           className="flex-row border-b border-slate-100 items-center"
           style={{ backgroundColor: rowBg }}
-          onPress={() => setSelTag(index)}
+          onPress={() => {
+            setSelTag(index);
+            setPunchHole(isPunchHoleValue(item.PH));
+          }}
           activeOpacity={0.7}
         >
-          {sel && (
+          {(sel || isScanned) && (
             <View
               style={{
-                position: 'absolute',
+                position: "absolute",
                 left: 0,
                 top: 0,
                 bottom: 0,
                 width: 3,
-                backgroundColor: '#3B82F6',
+                backgroundColor: isScanned ? "#10B981" : "#3B82F6",
                 zIndex: 1,
               }}
             />
           )}
-          {tagCols.map((col, ci) => (
-            <Text
-              key={ci}
-              style={{ width: col.width }}
-              className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${sel ? 'text-blue-700 font-semibold' : 'text-slate-600 font-normal'}`}
-              numberOfLines={1}
-            >
-              {String(item[col.key] ?? '')}
-            </Text>
-          ))}
+          {tagCols.map((col, ci) => {
+            if (col.key === "PH") {
+              return (
+                <View
+                  key={ci}
+                  style={{ width: col.width }}
+                  className="px-2 py-1 border-r border-slate-100"
+                >
+                  <CompactDropdown
+                    value={String(item.PH ?? "")}
+                    options={PH_OPTIONS}
+                    onSelect={(value) => {
+                      const epc = normalizeEpc(item.EPC);
+                      if (!epc) return;
+                      setSelTag(index);
+                      setPhByEpc((prev) => ({ ...prev, [epc]: value }));
+                    }}
+                    height={28}
+                    borderRadius={8}
+                    paddingHorizontal={8}
+                    fontSize={11}
+                    iconSize={12}
+                  />
+                </View>
+              );
+            }
+
+            if (col.key === "Note") {
+              return (
+                <View
+                  key={ci}
+                  style={{ width: col.width }}
+                  className="px-2 py-1 border-r border-slate-100"
+                >
+                  <TextInput
+                    value={String(item.Note ?? "")}
+                    onChangeText={(value) => {
+                      const epc = normalizeEpc(item.EPC);
+                      if (!epc) return;
+                      setSelTag(index);
+                      setNotesByEpc((prev) => ({ ...prev, [epc]: value }));
+                    }}
+                    placeholder="Note"
+                    placeholderTextColor="#94A3B8"
+                    style={{
+                      height: 28,
+                      borderRadius: 8,
+                      paddingHorizontal: 8,
+                      paddingVertical: 0,
+                      fontSize: 11,
+                    }}
+                    className="border-2 border-slate-200 bg-white font-medium text-slate-900"
+                    numberOfLines={1}
+                  />
+                </View>
+              );
+            }
+
+            return (
+              <Text
+                key={ci}
+                style={{ width: col.width }}
+                className={`px-3 py-2.5 border-r border-slate-100 text-[12px] ${
+                  isScanned
+                    ? "text-emerald-700 font-semibold"
+                    : sel
+                      ? "text-blue-700 font-semibold"
+                      : "text-slate-600 font-normal"
+                }`}
+                numberOfLines={1}
+              >
+                {String(item[col.key] ?? "")}
+              </Text>
+            );
+          })}
         </TouchableOpacity>
       );
     },
-    [selTag, tagCols],
+    [scannedEpcs, selTag, tagCols],
   );
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
 
-      {/* ── HEADER ── */}
-      <View className="flex-row items-center px-4 py-2.5 bg-white border-b border-slate-100">
-        <TouchableOpacity
-          className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 items-center justify-center mr-3"
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Feather name="arrow-left" size={17} color="#0F172A" />
-        </TouchableOpacity>
-
-        <View className="flex-1">
-          <Text className="text-base font-bold text-slate-900">Check In</Text>
-          <Text className="text-[10px] text-slate-400 mt-0.5">
-            RFID Tag Scanner
-          </Text>
-        </View>
-
-        <View className="flex-row items-center bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-          <Feather
-            name="map-pin"
-            size={10}
-            color="#3B82F6"
-            style={{ marginRight: 4 }}
-          />
-          <Text
-            className="text-[10px] font-bold text-blue-700"
-            numberOfLines={1}
-          >
-            {warehouseLabel}
-          </Text>
-        </View>
-      </View>
-
-      {/* ── TOOLBAR ── */}
-      <View className="bg-white border-b border-slate-200 px-4 pt-2.5 pb-2.5 shadow-sm">
-        {/* Row 1: Shelf + Carton */}
-        <View className="flex-row mb-2">
-          <View className="flex-1 mr-3">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              Shelf
-            </Text>
-            <CompactDropdown
-              value={shelf}
-              options={shelves}
-              onSelect={setShelf}
-              loading={loadingShelves}
-              height={44}
-              borderRadius={16}
-              iconSize={15}
-            />
-          </View>
-          <View className="flex-1">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              Carton No.
-            </Text>
-            <CompactDropdown
-              value={carton}
-              options={cartons}
-              onSelect={setCarton}
-              loading={loadingCartons}
-              height={44}
-              borderRadius={16}
-              iconSize={15}
-            />
-          </View>
-        </View>
-
-        {/* Row 2: No. + Punch Hole */}
-        <View className="flex-row mb-2">
-          <View className="flex-1 mr-3">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              No.
-            </Text>
-            <CompactDropdown
-              value={no}
-              options={NO_OPTIONS}
-              onSelect={setNo}
-              height={44}
-              borderRadius={16}
-              iconSize={15}
-            />
-          </View>
-
-          <View className="flex-1">
-            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              Punch Hole
-            </Text>
-            <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl px-3 h-11">
-              <Switch
-                value={punchHole}
-                onValueChange={setPunchHole}
-                trackColor={{ true: '#3B82F6', false: '#CBD5E1' }}
-                thumbColor="#FFFFFF"
-                style={{ transform: [{ scaleX: 0.78 }, { scaleY: 0.78 }] }}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Row 3: SCAN + SAVE */}
-        <View className="flex-row mb-2">
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        {/* ── HEADER ── */}
+        <View className="flex-row items-center px-4 py-2.5 bg-white border-b border-slate-100">
           <TouchableOpacity
-            className={`flex-1 h-11 rounded-2xl flex-row justify-center items-center mr-2 ${scanning ? 'bg-red-500' : 'bg-blue-600'}`}
-            onPress={() => setScanning(!scanning)}
-            activeOpacity={0.8}
+            className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 items-center justify-center mr-3"
+            onPress={() => router.back()}
+            activeOpacity={0.7}
           >
-            <Feather
-              name={scanning ? 'square' : 'radio'}
-              size={15}
-              color="white"
-              style={{ marginRight: 7 }}
-            />
-            <Text className="text-sm font-bold text-white tracking-wider">
-              {scanning ? 'STOP' : 'SCAN'}
-            </Text>
+            <Feather name="arrow-left" size={17} color="#0F172A" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            className="flex-1 h-11 bg-emerald-500 rounded-2xl flex-row justify-center items-center"
-            activeOpacity={0.8}
-          >
-            <Feather
-              name="save"
-              size={15}
-              color="white"
-              style={{ marginRight: 7 }}
-            />
-            <Text className="text-sm font-bold text-white">SAVE</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Row 4: Ghost buttons */}
-        <View className="flex-row gap-2">
-          {(
-            [
-              {
-                icon: 'refresh-cw',
-                label: 'Refresh',
-                bg: '#EFF6FF',
-                border: '#BFDBFE',
-                iconColor: '#2563EB',
-                textColor: '#1D4ED8',
-              },
-              {
-                icon: 'trash-2',
-                label: 'Clear',
-                bg: '#FEF2F2',
-                border: '#FECACA',
-                iconColor: '#DC2626',
-                textColor: '#B91C1C',
-              },
-              {
-                icon: 'crosshair',
-                label: 'Location',
-                bg: '#F0FDF4',
-                border: '#BBF7D0',
-                iconColor: '#16A34A',
-                textColor: '#15803D',
-              },
-            ] as const
-          ).map((btn) => (
-            <TouchableOpacity
-              key={btn.label}
-              style={{
-                flex: 1,
-                height: 32,
-                backgroundColor: btn.bg,
-                borderWidth: 1,
-                borderColor: btn.border,
-                borderRadius: 11,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-              activeOpacity={0.7}
-            >
-              <Feather
-                name={btn.icon}
-                size={12}
-                color={btn.iconColor}
-                style={{ marginRight: 5 }}
-              />
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '600',
-                  color: btn.textColor,
-                }}
-              >
-                {btn.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* ── BẢNG DELIVERY ── */}
-      <View className="flex-1 bg-white border-b-4 border-slate-200">
-        <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
-          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Delivery
-          </Text>
-          <View className="bg-blue-50 px-2 py-0.5 rounded-md">
-            <Text className="text-[10px] font-bold text-blue-600">
-              {deliveries.length}
+          <View className="flex-1">
+            <Text className="text-base font-bold text-slate-900">Check In</Text>
+            <Text className="text-[10px] text-slate-400 mt-0.5">
+              RFID Tag Scanner
             </Text>
           </View>
-          {loadingDeliveries && (
-            <ActivityIndicator size="small" color="#94A3B8" />
-          )}
-        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View
-              className="flex-row border-b-2 border-blue-100"
-              style={{ backgroundColor: '#F0F5FF' }}
-            >
-              {histCols.map((c) => (
-                <View
-                  key={c.label}
-                  style={{ width: c.width }}
-                  className="px-3 py-2.5 border-r border-blue-100 justify-center"
-                >
-                  <Text
-                    className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider"
-                    numberOfLines={1}
-                  >
-                    {c.label}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <FlatList
-              data={deliveries}
-              keyExtractor={keyExtractorIndex}
-              renderItem={renderDeliveryItem}
-              getItemLayout={getItemLayout}
-            />
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* ── BẢNG TAGS ── */}
-      <View className="flex-[1.2] bg-white">
-        <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
-          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Scanned Tags
-          </Text>
-          <View
-            className={`flex-row items-center px-2 py-0.5 rounded-md gap-1 ${scanning ? 'bg-blue-50' : 'bg-slate-100'}`}
-          >
-            <View
-              style={{
-                width: 5,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: scanning ? '#3B82F6' : '#94A3B8',
-              }}
+          <View className="flex-row items-center bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+            <Feather
+              name="map-pin"
+              size={10}
+              color="#3B82F6"
+              style={{ marginRight: 4 }}
             />
             <Text
-              className={`text-[10px] font-bold ${scanning ? 'text-blue-600' : 'text-slate-400'}`}
+              className="text-[10px] font-bold text-blue-700"
+              numberOfLines={1}
             >
-              {tags.length}
+              {warehouseLabel}
             </Text>
           </View>
-          {loadingTags && <ActivityIndicator size="small" color="#94A3B8" />}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          persistentScrollbar
-        >
-          <View>
-            <View
-              className="flex-row border-b-2 border-blue-100"
-              style={{ backgroundColor: '#F0F5FF' }}
-            >
-              {tagCols.map((c) => (
-                <View
-                  key={c.label}
-                  style={{ width: c.width }}
-                  className="px-3 py-2.5 border-r border-blue-100 justify-center"
-                >
-                  <Text
-                    className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider"
-                    numberOfLines={1}
-                  >
-                    {c.label}
-                  </Text>
-                </View>
-              ))}
+        {/* ── TOOLBAR ── */}
+        <View className="bg-white border-b border-slate-200 px-4 pt-2.5 pb-2.5 shadow-sm">
+          {/* Row 1: Shelf + Carton */}
+          <View className="flex-row mb-2">
+            <View className="flex-1 mr-3">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                Shelf
+              </Text>
+              <CompactDropdown
+                value={shelf}
+                options={shelves}
+                onSelect={setShelf}
+                loading={loadingShelves}
+                height={44}
+                borderRadius={16}
+                iconSize={15}
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                Carton No.
+              </Text>
+              <CompactDropdown
+                value={carton}
+                options={cartons}
+                onSelect={setCarton}
+                loading={loadingCartons}
+                height={44}
+                borderRadius={16}
+                iconSize={15}
+              />
+            </View>
+          </View>
+
+          {/* Row 2: No. + Punch Hole */}
+          <View className="flex-row mb-2">
+            <View className="flex-1 mr-3">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                No.
+              </Text>
+              <CompactDropdown
+                value={no}
+                options={NO_OPTIONS}
+                onSelect={setNo}
+                height={44}
+                borderRadius={16}
+                iconSize={15}
+              />
             </View>
 
-            <FlatList
-              data={tags}
-              keyExtractor={keyExtractorIndex}
-              renderItem={renderTagItem}
-              getItemLayout={getItemLayout}
-            />
+            <View className="flex-1">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                PH
+              </Text>
+              <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl px-3 h-11">
+                <Text
+                  className="text-[12px] font-semibold text-slate-600"
+                  numberOfLines={1}
+                >
+                  Punch hole
+                </Text>
+                <Switch
+                  value={punchHole}
+                  onValueChange={handlePunchHoleChange}
+                  trackColor={{ true: "#3B82F6", false: "#CBD5E1" }}
+                  thumbColor="#FFFFFF"
+                  style={{ transform: [{ scaleX: 0.78 }, { scaleY: 0.78 }] }}
+                />
+              </View>
+            </View>
           </View>
-        </ScrollView>
-      </View>
+
+          {/* Row 3: SCAN + SAVE */}
+          <View className="flex-row mb-2">
+            <TouchableOpacity
+              className={`flex-1 h-11 rounded-2xl flex-row justify-center items-center mr-2 ${scanning ? "bg-red-500" : "bg-blue-600"}`}
+              onPress={scanning ? stopPdaScan : startPdaScan}
+              disabled={scanStarting}
+              activeOpacity={0.8}
+            >
+              <Feather
+                name={scanning ? "square" : "radio"}
+                size={15}
+                color="white"
+                style={{ marginRight: 7 }}
+              />
+              <Text className="text-sm font-bold text-white tracking-wider">
+                {scanStarting ? "WAIT" : scanning ? "STOP" : "SCAN"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-1 h-11 bg-emerald-500 rounded-2xl flex-row justify-center items-center"
+              activeOpacity={0.8}
+            >
+              <Feather
+                name="save"
+                size={15}
+                color="white"
+                style={{ marginRight: 7 }}
+              />
+              <Text className="text-sm font-bold text-white">SAVE</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Row 4: Ghost buttons */}
+          <View className="flex-row gap-2">
+            {(
+              [
+                {
+                  icon: "refresh-cw",
+                  label: "Refresh",
+                  bg: "#EFF6FF",
+                  border: "#BFDBFE",
+                  iconColor: "#2563EB",
+                  textColor: "#1D4ED8",
+                },
+                {
+                  icon: "trash-2",
+                  label: "Clear",
+                  bg: "#FEF2F2",
+                  border: "#FECACA",
+                  iconColor: "#DC2626",
+                  textColor: "#B91C1C",
+                },
+                {
+                  icon: "crosshair",
+                  label: "Location",
+                  bg: "#F0FDF4",
+                  border: "#BBF7D0",
+                  iconColor: "#16A34A",
+                  textColor: "#15803D",
+                },
+              ] as const
+            ).map((btn) => (
+              <TouchableOpacity
+                key={btn.label}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  backgroundColor: btn.bg,
+                  borderWidth: 1,
+                  borderColor: btn.border,
+                  borderRadius: 11,
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather
+                  name={btn.icon}
+                  size={12}
+                  color={btn.iconColor}
+                  style={{ marginRight: 5 }}
+                />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "600",
+                    color: btn.textColor,
+                  }}
+                >
+                  {btn.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* ── BẢNG DELIVERY ── */}
+        <View className="flex-1 bg-white border-b-4 border-slate-200">
+          <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Delivery
+            </Text>
+            <View className="bg-blue-50 px-2 py-0.5 rounded-md">
+              <Text className="text-[10px] font-bold text-blue-600">
+                {deliveries.length}
+              </Text>
+            </View>
+            {loadingDeliveries && (
+              <ActivityIndicator size="small" color="#94A3B8" />
+            )}
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View>
+              <View
+                className="flex-row border-b-2 border-blue-100"
+                style={{ backgroundColor: "#F0F5FF" }}
+              >
+                {histCols.map((c) => (
+                  <View
+                    key={c.label}
+                    style={{ width: c.width }}
+                    className="px-3 py-2.5 border-r border-blue-100 justify-center"
+                  >
+                    <Text
+                      className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider"
+                      numberOfLines={1}
+                    >
+                      {c.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <FlatList
+                data={deliveries}
+                keyExtractor={keyExtractorIndex}
+                renderItem={renderDeliveryItem}
+                getItemLayout={getItemLayout}
+              />
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* ── BẢNG TAGS ── */}
+        <View className="flex-[1.2] bg-white">
+          <View className="flex-row items-center px-4 pt-2 pb-1 gap-2">
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Scanned Tags
+            </Text>
+            <View
+              className={`flex-row items-center px-2 py-0.5 rounded-md gap-1 ${scanning ? "bg-blue-50" : "bg-slate-100"}`}
+            >
+              <View
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: scanning ? "#3B82F6" : "#94A3B8",
+                }}
+              />
+              <Text
+                className={`text-[10px] font-bold ${scanning ? "text-blue-600" : "text-slate-400"}`}
+              >
+                {scannedCount}/{tags.length}
+              </Text>
+            </View>
+            {loadingTags && <ActivityIndicator size="small" color="#94A3B8" />}
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            persistentScrollbar
+            keyboardShouldPersistTaps="handled"
+          >
+            <View>
+              <View
+                className="flex-row border-b-2 border-blue-100"
+                style={{ backgroundColor: "#F0F5FF" }}
+              >
+                {tagCols.map((c) => (
+                  <View
+                    key={c.label}
+                    style={{ width: c.width }}
+                    className="px-3 py-2.5 border-r border-blue-100 justify-center"
+                  >
+                    <Text
+                      className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider"
+                      numberOfLines={1}
+                    >
+                      {c.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <FlatList
+                data={displayTags}
+                keyExtractor={keyExtractorIndex}
+                renderItem={renderTagItem}
+                getItemLayout={getItemLayout}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="none"
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

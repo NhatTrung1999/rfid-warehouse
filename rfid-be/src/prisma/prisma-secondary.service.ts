@@ -44,17 +44,20 @@ export class SecondaryPrismaService
     });
     super({
       adapter,
-      log: [{ emit: 'event', level: 'query' }],
     });
+    // super({
+    //   adapter,
+    //   log: [{ emit: 'event', level: 'query' }],
+    // });
 
-    (this as any).$on('query', (e: any) => {
-      this.logger.debug(`SQL: ${e.query}`);
-      this.logger.debug(`Params: ${e.params}`);
-      this.logger.debug(`Duration: ${e.duration}ms`);
-      this.logger.debug(
-        `SQL (đã điền giá trị, copy paste vào SSMS):\n${interpolateSqlParams(e.query, e.params)}`,
-      );
-    });
+    // (this as any).$on('query', (e: any) => {
+    //   this.logger.debug(`SQL: ${e.query}`);
+    //   this.logger.debug(`Params: ${e.params}`);
+    //   this.logger.debug(`Duration: ${e.duration}ms`);
+    //   this.logger.debug(
+    //     `SQL (đã điền giá trị, copy paste vào SSMS):\n${interpolateSqlParams(e.query, e.params)}`,
+    //   );
+    // });
   }
 
   async onModuleInit() {

@@ -80,6 +80,8 @@ const checkinSlice = createSlice({
     builder
       .addCase(fetchShelves.pending, (state) => {
         state.loadingShelves = true;
+        state.shelves = [];
+        state.cartons = [];
         state.error = null;
       })
       .addCase(
@@ -91,6 +93,7 @@ const checkinSlice = createSlice({
       )
       .addCase(fetchShelves.rejected, (state, action) => {
         state.loadingShelves = false;
+        state.shelves = [];
         state.error = action.error.message ?? 'Không thể tải danh sách shelf';
       });
 
@@ -98,6 +101,7 @@ const checkinSlice = createSlice({
     builder
       .addCase(fetchCartons.pending, (state) => {
         state.loadingCartons = true;
+        state.cartons = [];
         state.error = null;
       })
       .addCase(
@@ -109,6 +113,7 @@ const checkinSlice = createSlice({
       )
       .addCase(fetchCartons.rejected, (state, action) => {
         state.loadingCartons = false;
+        state.cartons = [];
         state.error = action.error.message ?? 'Không thể tải danh sách carton';
       });
 
@@ -116,6 +121,8 @@ const checkinSlice = createSlice({
     builder
       .addCase(fetchDeliveries.pending, (state) => {
         state.loadingDeliveries = true;
+        state.deliveries = [];
+        state.tags = [];
         state.error = null;
       })
       .addCase(
@@ -127,6 +134,7 @@ const checkinSlice = createSlice({
       )
       .addCase(fetchDeliveries.rejected, (state, action) => {
         state.loadingDeliveries = false;
+        state.deliveries = [];
         state.error =
           action.error.message ?? 'Không thể tải danh sách delivery';
       });
@@ -135,6 +143,7 @@ const checkinSlice = createSlice({
     builder
       .addCase(fetchTags.pending, (state) => {
         state.loadingTags = true;
+        state.tags = [];
         state.error = null;
       })
       .addCase(
@@ -146,6 +155,7 @@ const checkinSlice = createSlice({
       )
       .addCase(fetchTags.rejected, (state, action) => {
         state.loadingTags = false;
+        state.tags = [];
         state.error = action.error.message ?? 'Không thể tải dữ liệu scan';
       });
   },

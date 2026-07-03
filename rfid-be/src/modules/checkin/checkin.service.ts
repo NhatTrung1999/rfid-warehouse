@@ -36,6 +36,19 @@ export interface ScanData {
   Size: string;
 }
 
+export interface CheckEpcData {
+  DeliverNO: string;
+  Qty: number;
+  LocationTo: string;
+}
+
+export interface CartonNumberData {
+  ShelfId: string;
+  CartonNumberOnly: string;
+  NoOnly: string;
+  CartonNumber: string;
+}
+
 @Injectable()
 export class CheckinService {
   constructor(private readonly secondaryPrisma: SecondaryPrismaService) {}
@@ -174,5 +187,137 @@ WHERE  d.DeliverNO = ${deliveryNo.trim()}
                       AND c.EPC = d.EPC
            );`;
     return rows;
+  }
+
+  async getCartonNumber(epc: string): Promise<CartonNumberData | null> {
+    const epcValue = epc.trim();
+    const rows = await this.secondaryPrisma.$queryRaw<
+      CartonNumberData[]
+    >`SELECT CASE 
+                  WHEN ISNULL(b.ShelfId ,'')<>'' THEN b.ShelfId
+                  WHEN ISNULL(b.ShelfIdDF ,'')<>'' THEN b.ShelfIdDF
+                  ELSE b.ShelfIdBFDF
+             END  AS ShelfId
+            ,CASE 
+                  WHEN m.LocationDetailId IS NOT NULL AND ISNULL(ldm.LocationDetailName ,'')<>'' THEN LTRIM(RTRIM(m.LocationDetailId))
+                  WHEN ISNULL(b.ShelfId ,'')<>'' THEN LTRIM(RTRIM(ISNULL(NULLIF(b.CartonNumber ,'') ,b.ShelfId)))
+                  WHEN ISNULL(b.ShelfIdDF ,'')<>'' THEN LTRIM(RTRIM(ISNULL(NULLIF(b.CartonNumberDF ,'') ,b.ShelfIdDF)))
+                  ELSE LTRIM(
+                           RTRIM(ISNULL(NULLIF(b.CartonNumberBFDF ,'') ,b.ShelfIdBFDF))
+                       )
+             END  AS CartonNumberOnly
+            ,CASE 
+                  WHEN m.LocationDetailId IS NOT NULL AND ISNULL(ldm.LocationDetailName ,'')<>'' THEN LTRIM(RTRIM(ISNULL(CAST(m.[No] AS VARCHAR(10)) ,'')))
+                  WHEN ISNULL(b.ShelfId ,'')<>'' THEN LTRIM(RTRIM(ISNULL(CAST(b.[No] AS VARCHAR(10)) ,'')))
+                  WHEN ISNULL(b.ShelfIdDF ,'')<>'' THEN LTRIM(RTRIM(ISNULL(CAST(b.NoDF AS VARCHAR(10)) ,'')))
+                  ELSE LTRIM(RTRIM(ISNULL(CAST(b.NoBFDF AS VARCHAR(10)) ,'')))
+             END  AS NoOnly
+            ,CASE 
+                  WHEN m.LocationDetailId IS NOT NULL AND ISNULL(ldm.LocationDetailName ,'')<>'' THEN LTRIM(RTRIM(ldm.LocationDetailName))
+                      +CASE 
+                            WHEN ISNULL(m.[No] ,0)=0 THEN ''
+                            ELSE ' - '+CAST(m.[No] AS VARCHAR(10))
+                       END
+                  WHEN ISNULL(b.ShelfId ,'')<>'' THEN REPLACE(
+                           CASE 
+                                WHEN LEN(ISNULL(NULLIF(b.CartonNumber ,'') ,b.ShelfId))>4
+                           AND LEFT(ISNULL(NULLIF(b.CartonNumber ,'') ,b.ShelfId) ,4)='LODE'
+                               THEN RIGHT(
+                                   ISNULL(NULLIF(b.CartonNumber ,'') ,b.ShelfId)
+                                  ,LEN(ISNULL(NULLIF(b.CartonNumber ,'') ,b.ShelfId))- 4
+                               )
+                               ELSE ISNULL(NULLIF(b.CartonNumber ,'') ,b.ShelfId) END
+                          ,'-'
+                          ,' - '
+                       )
+                      +CASE 
+                            WHEN ISNULL(b.[No] ,0)=0 THEN ''
+                            ELSE ' - '+CAST(b.[No] AS VARCHAR(10))
+                       END
+                  WHEN ISNULL(b.ShelfIdDF ,'')<>'' THEN REPLACE(
+                           CASE 
+                                WHEN LEN(ISNULL(NULLIF(b.CartonNumberDF ,'') ,b.ShelfIdDF))>4
+                           AND LEFT(ISNULL(NULLIF(b.CartonNumberDF ,'') ,b.ShelfIdDF) ,4)='LODE'
+                               THEN RIGHT(
+                                   ISNULL(NULLIF(b.CartonNumberDF ,'') ,b.ShelfIdDF)
+                                  ,LEN(ISNULL(NULLIF(b.CartonNumberDF ,'') ,b.ShelfIdDF))- 4
+                               )
+                               ELSE ISNULL(NULLIF(b.CartonNumberDF ,'') ,b.ShelfIdDF) END
+                          ,'-'
+                          ,' - '
+                       )
+                      +CASE 
+                            WHEN ISNULL(b.NoDF ,0)=0 THEN ''
+                            ELSE ' - '+CAST(b.NoDF AS VARCHAR(10))
+                       END
+                  WHEN ISNULL(b.ShelfIdBFDF ,'')<>'' THEN REPLACE(
+                           CASE 
+                                WHEN LEN(ISNULL(NULLIF(b.CartonNumberBFDF ,'') ,b.ShelfIdBFDF))>4
+                           AND LEFT(ISNULL(NULLIF(b.CartonNumberBFDF ,'') ,b.ShelfIdBFDF) ,4)='LODE'
+                               THEN RIGHT(
+                                   ISNULL(NULLIF(b.CartonNumberBFDF ,'') ,b.ShelfIdBFDF)
+                                  ,LEN(ISNULL(NULLIF(b.CartonNumberBFDF ,'') ,b.ShelfIdBFDF))- 4
+                               )
+                               ELSE ISNULL(NULLIF(b.CartonNumberBFDF ,'') ,b.ShelfIdBFDF) END
+                          ,'-'
+                          ,' - '
+                       )
+                      +CASE 
+                            WHEN ISNULL(b.NoBFDF ,0)=0 THEN ''
+                            ELSE ' - '+CAST(b.NoBFDF AS VARCHAR(10))
+                       END
+                  ELSE ''
+             END  AS CartonNumber
+      FROM   SampleShoeInOut_Binding b WITH (NOLOCK)
+             OUTER APPLY (
+                SELECT TOP 1 m2.LocationDetailId
+                      ,m2.[No]
+                FROM   SampleShoeInOut_DeliverDetail d WITH (NOLOCK)
+                       INNER JOIN SampleShoeInOut_Deliver m2 WITH (NOLOCK)
+                            ON d.DeliverNo = m2.DeliverNo
+                WHERE  d.YN = 1
+                       AND d.EPC = ${epcValue}
+                       AND d.EPC IS NOT NULL
+                       AND ISNULL(m2.LocationDetailId ,'')<>''
+                ORDER BY
+                       m2.DateCheckOut DESC
+                      ,m2.DeliverNO DESC
+             ) m
+             LEFT JOIN SampleShoeInOut_LocationDetail ldm WITH (NOLOCK)
+                  ON ldm.LocationDetailId = m.LocationDetailId
+                     AND m.LocationDetailId IS NOT NULL
+      WHERE  b.EPC = ${epcValue}
+             AND b.ReleaseDate IS NULL`;
+    return rows[0] ?? null;
+  }
+
+  async checkEpc(epc: string): Promise<CheckEpcData | null> {
+    const rows = await this.secondaryPrisma.$queryRaw<
+      CheckEpcData[]
+    >`SELECT TOP 1
+             m.DeliverNO AS DeliverNO,
+             m.Qty,
+             m.LocationTo
+      FROM   SampleShoeInOut_Deliver m
+             LEFT JOIN SampleShoeInOut_DeliverDetail d
+                  ON d.DeliverNO = m.DeliverNO
+      WHERE  m.YN = '1'
+             AND d.YN = '1'
+             AND d.EPC = ${epc.trim()}
+             AND (
+                    m.Enough = 0
+                    OR (
+                         m.Enough IS NULL
+                         AND (m.AccountCheckIn IS NULL OR m.DateCheckIn IS NULL)
+                       )
+                 )
+             AND NOT EXISTS (
+                    SELECT 1
+                    FROM   SampleShoeInOut_DeliverDetailCheckEnough c
+                    WHERE  c.DeliverNo = d.DeliverNo
+                           AND c.EPC = d.EPC
+                 )
+      ORDER BY m.DeliverNO DESC`;
+    return rows[0] ?? null;
   }
 }
