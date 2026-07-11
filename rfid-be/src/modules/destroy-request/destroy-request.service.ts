@@ -60,6 +60,19 @@ export interface DestroyRequestDataWarehouses {
   totalPages: number;
 }
 
+export interface CancelDestroyRequestResult {
+  success: boolean;
+  requested: number;
+}
+
+export interface UpdateCheckExportResult {
+  success: boolean;
+  requested: number;
+  updated: number;
+}
+
+const CHECK_EXPORT_BATCH_SIZE = 1000;
+
 @Injectable()
 export class DestroyRequestService {
   constructor(private readonly secondaryPrisma: SecondaryPrismaService) {}
@@ -171,7 +184,82 @@ export class DestroyRequestService {
     return rows;
   }
 
+  async cancelDestroyRequest(
+    epcs: string[],
+  ): Promise<CancelDestroyRequestResult> {
+    const uniqueEpcs = [...new Set(epcs.map((epc) => epc.trim()).filter(Boolean))];
+
+    await this.secondaryPrisma.$executeRaw`
+      UPDATE SampleShoeInOut_DisposalQueue
+      SET YN = 0
+      WHERE YN = 1
+        AND EPC IN (${Prisma.join(uniqueEpcs)})
+    `;
+
+    return {
+      success: true,
+      requested: uniqueEpcs.length,
+    };
+  }
+
+  async updateCheckExport(epcs: string[]): Promise<UpdateCheckExportResult> {
+    const uniqueEpcs = [...new Set(epcs.map((epc) => epc.trim()).filter(Boolean))];
+
+    if (uniqueEpcs.length === 0) {
+      return {
+        success: true,
+        requested: 0,
+        updated: 0,
+      };
+    }
+
+    let updated = 0;
+
+    for (let index = 0; index < uniqueEpcs.length; index += CHECK_EXPORT_BATCH_SIZE) {
+      const epcBatch = uniqueEpcs.slice(index, index + CHECK_EXPORT_BATCH_SIZE);
+      const updatedBatch = await this.secondaryPrisma.$executeRaw`
+        WITH Latest AS (
+          SELECT dq.EPC,
+                 MAX(dq.CreatedTime) AS MaxTime
+          FROM dbo.SampleShoeInOut_DisposalQueue dq WITH (UPDLOCK, HOLDLOCK)
+          WHERE dq.EPC IN (${Prisma.join(epcBatch)})
+            AND ISNULL(dq.YN, 1) = 1
+            AND ISNULL(dq.Destroy, 0) = 1
+            AND dq.CheckExport IS NULL
+            AND dq.AccountCheckIn IS NULL
+            AND dq.CreatedTime IS NOT NULL
+          GROUP BY dq.EPC
+        ),
+        T AS (
+          SELECT dq.*
+          FROM dbo.SampleShoeInOut_DisposalQueue dq
+          JOIN Latest le
+            ON dq.EPC = le.EPC
+           AND dq.CreatedTime = le.MaxTime
+        )
+        UPDATE t
+        SET t.CheckExport = 1,
+            t.CheckTime = GETDATE()
+        FROM T t
+        LEFT JOIN [ERP].[LIY_ERP].[dbo].[DisposalInfo] di
+          ON di.Season COLLATE DATABASE_DEFAULT = t.Season COLLATE DATABASE_DEFAULT
+         AND di.Stage COLLATE DATABASE_DEFAULT = t.Stage COLLATE DATABASE_DEFAULT
+         AND di.Category COLLATE DATABASE_DEFAULT = t.Category COLLATE DATABASE_DEFAULT
+         AND di.YN = 1
+      `;
+
+      updated += Number(updatedBatch);
+    }
+
+    return {
+      success: true,
+      requested: uniqueEpcs.length,
+      updated: Number(updated),
+    };
+  }
+
   async getDestroyRequestDataWarehouses(
+    epc: string,
     modelName: string[],
     stage: string[],
     season: string[],
@@ -187,6 +275,15 @@ export class DestroyRequestService {
     const safePage = Math.max(1, Math.floor(page) || 1);
     const safePageSize = Math.min(200, Math.max(1, Math.floor(pageSize) || 50));
     const offset = (safePage - 1) * safePageSize;
+    const epcValue = epc.trim();
+    const epcFilter = epcValue
+      ? Prisma.sql`AND b.EPC LIKE ${'%' + epcValue + '%'}`
+      : Prisma.empty;
+
+    const locationFilter = location.length
+      ? Prisma.sql`AND b.LocationId COLLATE DATABASE_DEFAULT IN (${Prisma.join(location)})`
+      : Prisma.empty;
+
     const modelFilter = modelName.length
       ? Prisma.sql`AND b.ShoeName COLLATE DATABASE_DEFAULT IN (${Prisma.join(modelName)})`
       : Prisma.empty;
@@ -313,6 +410,8 @@ export class DestroyRequestService {
                                     )
                             )
                         AND (@EPC IS NULL OR b.EPC LIKE @EPC)
+                        ${epcFilter}
+                        ${locationFilter}
                         ${modelFilter}
                         ${fdFilter}
                         ${articleFilter}

@@ -1,5 +1,9 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { destroyRequestService } from '../../lib/destroy-request-service';
+import {
+  destroyRequestService,
+  DestroyRequestData,
+  DestroyRequestFilters,
+} from '../../lib/destroy-request-service';
 
 // ─── STATE ────────────────────────────────────────────────────
 
@@ -28,6 +32,15 @@ interface DestroyRequestState {
   locations: { label: string; value: string }[];
   loadingLocations: boolean;
 
+  tableRows: DestroyRequestData[];
+  loadingTable: boolean;
+  loadingMore: boolean;
+  canceling: boolean;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+
   error: string | null;
 }
 
@@ -55,6 +68,15 @@ const initialState: DestroyRequestState = {
 
   locations: [],
   loadingLocations: false,
+
+  tableRows: [],
+  loadingTable: false,
+  loadingMore: false,
+  canceling: false,
+  total: 0,
+  page: 1,
+  pageSize: 50,
+  totalPages: 0,
 
   error: null,
 };
@@ -100,6 +122,17 @@ export const fetchLocations = createAsyncThunk(
   async () => destroyRequestService.getLocations(),
 );
 
+export const fetchDataWarehouses = createAsyncThunk(
+  'destroyRequest/fetchDataWarehouses',
+  async (filters: DestroyRequestFilters) =>
+    destroyRequestService.getDataWarehouses(filters),
+);
+
+export const cancelDestroyRequests = createAsyncThunk(
+  'destroyRequest/cancelDestroyRequests',
+  async (epcs: string[]) => destroyRequestService.cancelDestroyRequests(epcs),
+);
+
 // ─── SLICE ────────────────────────────────────────────────────
 
 const destroyRequestSlice = createSlice({
@@ -111,6 +144,66 @@ const destroyRequestSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    // fetchDataWarehouses
+    builder
+      .addCase(fetchDataWarehouses.pending, (state, action) => {
+        const requestedPage = action.meta.arg.page ?? 1;
+        if (requestedPage > 1) {
+          state.loadingMore = true;
+        } else {
+          state.loadingTable = true;
+          state.tableRows = [];
+          state.total = 0;
+          state.page = 1;
+          state.totalPages = 0;
+        }
+        state.error = null;
+      })
+      .addCase(
+        fetchDataWarehouses.fulfilled,
+        (state, action) => {
+          const requestedPage = action.meta.arg.page ?? 1;
+          if (requestedPage > 1) {
+            state.tableRows = [...state.tableRows, ...action.payload.data];
+          } else {
+            state.tableRows = action.payload.data;
+          }
+          state.total = action.payload.total;
+          state.page = action.payload.page;
+          state.pageSize = action.payload.pageSize;
+          state.totalPages = action.payload.totalPages;
+          state.loadingTable = false;
+          state.loadingMore = false;
+        },
+      )
+      .addCase(fetchDataWarehouses.rejected, (state, action) => {
+        state.loadingTable = false;
+        state.loadingMore = false;
+        if ((action.meta.arg.page ?? 1) <= 1) {
+          state.tableRows = [];
+          state.total = 0;
+          state.page = 1;
+          state.totalPages = 0;
+        }
+        state.error =
+          action.error.message ?? 'KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u Destroy Request';
+      });
+
+    // cancelDestroyRequests
+    builder
+      .addCase(cancelDestroyRequests.pending, (state) => {
+        state.canceling = true;
+        state.error = null;
+      })
+      .addCase(cancelDestroyRequests.fulfilled, (state) => {
+        state.canceling = false;
+      })
+      .addCase(cancelDestroyRequests.rejected, (state, action) => {
+        state.canceling = false;
+        state.error =
+          action.error.message ?? 'KhÃ´ng thá»ƒ há»§y Destroy Request';
+      });
+
     // fetchModelNames
     builder
       .addCase(fetchModelNames.pending, (state) => {

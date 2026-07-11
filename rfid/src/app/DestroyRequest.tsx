@@ -1,7 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   ScrollView,
   StatusBar,
@@ -12,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CompactDropdown } from '../components/CompactDropdown';
+import { exportDestroyRequestsToExcel } from '../lib/destroy-request-excel';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   fetchModelNames,
@@ -22,7 +25,19 @@ import {
   fetchFDs,
   fetchNoticeNos,
   fetchLocations,
+  fetchDataWarehouses,
+  cancelDestroyRequests,
+  clearError,
 } from '../store/slices/destroyRequestSlice';
+import {
+  destroyRequestService,
+  DestroyRequestData,
+  DestroyRequestFilters,
+} from '../lib/destroy-request-service';
+
+const PAGE_SIZE = 50;
+const EXPORT_PAGE_SIZE = 1000;
+const FD_CONFIRM_STATUS = 'FD confirm';
 
 // ─── DYNAMIC COLUMN WIDTH ─────────────────────────────────────
 function calcColWidths<K extends string, T extends Record<K, unknown>>(
@@ -57,117 +72,6 @@ const STATUS_LIST = [
   'Destroy InProcess',
   'Destroy Adopt',
   'Keep',
-];
-
-const TABLE_DATA = [
-  {
-    EPC: 'E280699500000401701636SDB',
-    Article: 'JP6078',
-    Model: 'COPA PREMIERE',
-    Category: 'PDX(SKB)',
-    Stage: 'TS2',
-    Size: '8.5',
-    Season: 'FW25',
-    NoticeNo: '122507723',
-    FD: 'MY HANH',
-    DeviceType: 'Inline',
-    ShoesType: 'Finish Shoes',
-    ConfirmDate: '',
-    ConfirmUser: '',
-    Status: 'FD confirm',
-    Destroy: true,
-    Reason: '',
-  },
-  {
-    EPC: 'E280699500000401701635609',
-    Article: 'JP6078',
-    Model: 'COPA PREMIERE',
-    Category: 'PDX(SKB)',
-    Stage: 'TS2',
-    Size: '8.5',
-    Season: 'FW25',
-    NoticeNo: '122507723',
-    FD: 'MY HANH',
-    DeviceType: 'Inline',
-    ShoesType: 'Finish Shoes',
-    ConfirmDate: '',
-    ConfirmUser: '',
-    Status: 'FD confirm',
-    Destroy: false,
-    Reason: '',
-  },
-  {
-    EPC: 'E280699500000401701635600',
-    Article: 'JP6078',
-    Model: 'COPA PREMIERE',
-    Category: 'PDX(SKB)',
-    Stage: 'TS2',
-    Size: '8.5',
-    Season: 'FW25',
-    NoticeNo: '122507723',
-    FD: 'MY HANH',
-    DeviceType: 'Inline',
-    ShoesType: 'Finish Shoes',
-    ConfirmDate: '',
-    ConfirmUser: '',
-    Status: 'FD confirm',
-    Destroy: false,
-    Reason: '',
-  },
-  {
-    EPC: 'E280699500000501701635509',
-    Article: 'JP6078',
-    Model: 'COPA PREMIERE',
-    Category: 'PDX(SKB)',
-    Stage: 'TS2',
-    Size: '8.5',
-    Season: 'FW25',
-    NoticeNo: '122507723',
-    FD: 'MY HANH',
-    DeviceType: 'Inline',
-    ShoesType: 'Finish Shoes',
-    ConfirmDate: '',
-    ConfirmUser: '',
-    Status: 'FD confirm',
-    Destroy: false,
-    Reason: '',
-  },
-  {
-    EPC: 'E280699500000501701635SF1',
-    Article: 'JP6078',
-    Model: 'COPA PREMIERE',
-    Category: 'PDX(SKB)',
-    Stage: 'TS2',
-    Size: '8.5',
-    Season: 'FW25',
-    NoticeNo: '122507723',
-    FD: 'MY HANH',
-    DeviceType: 'Inline',
-    ShoesType: 'Finish Shoes',
-    ConfirmDate: '',
-    ConfirmUser: '',
-    Status: 'FD confirm',
-    Destroy: false,
-    Reason: '',
-  },
-  {
-    EPC: 'E280699500000501701635SF2',
-    Article: 'JP6078',
-    Model: 'COPA PREMIERE',
-    Category: 'PDX(SKB)',
-    Stage: 'TS2',
-    Size: '8.5',
-    Season: 'FW25',
-    NoticeNo: '122507723',
-    FD: 'MY HANH',
-    DeviceType: 'Inline',
-    ShoesType: 'Finish Shoes',
-    ConfirmDate: '',
-    ConfirmUser: '',
-    Status: 'FD confirm',
-    Destroy: false,
-    Reason: '',
-  },
 ];
 
 // Columns: EPC | Article | Model | Category | Stage | Size | Season | Notice No | FD | Device Type | Shoes Type | Confirm Date | Confirm User | Status | Destroy | Reason
@@ -281,6 +185,14 @@ export default function DestroyRequest() {
     loadingNoticeNos,
     locations,
     loadingLocations,
+    tableRows,
+    loadingTable,
+    loadingMore,
+    canceling,
+    total,
+    page,
+    totalPages,
+    error,
   } = useAppSelector((state) => state.destroyRequest);
 
   // filter state
@@ -295,6 +207,68 @@ export default function DestroyRequest() {
   const [status, setStatus] = useState<string[]>([]);
   const [noticeNo, setNoticeNo] = useState<string[]>([]);
   const [checkAll, setCheckAll] = useState(false);
+  const [exportingFdConfirm, setExportingFdConfirm] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState<DestroyRequestFilters>({
+    page: 1,
+    pageSize: PAGE_SIZE,
+  });
+
+  const buildApiFilters = useCallback(
+    (nextPage = 1) => ({
+      epc: epc.trim(),
+      modelName: model,
+      stage,
+      season,
+      category,
+      article,
+      fd,
+      location,
+      status: status.filter((item) => item !== 'ALL'),
+      noticeNo,
+      page: nextPage,
+      pageSize: PAGE_SIZE,
+    }),
+    [
+      article,
+      category,
+      epc,
+      fd,
+      location,
+      model,
+      noticeNo,
+      season,
+      stage,
+      status,
+    ],
+  );
+
+  const handleSearch = useCallback(() => {
+    const nextFilters = buildApiFilters(1);
+    setAppliedFilters(nextFilters);
+    dispatch(fetchDataWarehouses(nextFilters));
+  }, [buildApiFilters, dispatch]);
+
+  const handleLoadMore = useCallback(() => {
+    if (loadingTable || loadingMore || page >= totalPages || totalPages <= 1) {
+      return;
+    }
+
+    const nextFilters = {
+      ...appliedFilters,
+      page: page + 1,
+      pageSize: PAGE_SIZE,
+    };
+    setAppliedFilters(nextFilters);
+    dispatch(fetchDataWarehouses(nextFilters));
+  }, [
+    appliedFilters,
+    dispatch,
+    loadingMore,
+    loadingTable,
+    page,
+    totalPages,
+  ]);
 
   // API data
   useEffect(() => {
@@ -306,18 +280,42 @@ export default function DestroyRequest() {
     dispatch(fetchFDs());
     dispatch(fetchNoticeNos());
     dispatch(fetchLocations());
+    dispatch(fetchDataWarehouses({ page: 1, pageSize: PAGE_SIZE }));
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!error) return;
+    Alert.alert('Error', error);
+    dispatch(clearError());
+  }, [dispatch, error]);
 
   // table
   const [selRow, setSelRow] = useState<number | null>(0);
-  const [destroyRows, setDestroyRows] = useState<boolean[]>(
-    TABLE_DATA.map((r) => r.Destroy),
-  );
+  const [destroyRows, setDestroyRows] = useState<boolean[]>([]);
+
+  const tableData = tableRows;
 
   const tableCols = useMemo(
-    () => calcColWidths(TABLE_COLS_DEF, TABLE_DATA),
-    [],
+    () => calcColWidths(TABLE_COLS_DEF, tableData),
+    [tableData],
   );
+
+  useEffect(() => {
+    setDestroyRows((prev) => {
+      const nextDestroyRows = tableData.map(
+        (row, index) => prev[index] ?? Boolean(row.Destroy),
+      );
+      setCheckAll(
+        nextDestroyRows.length > 0 && nextDestroyRows.every(Boolean),
+      );
+      return nextDestroyRows;
+    });
+    setSelRow((current) => {
+      if (tableData.length === 0) return null;
+      if (current === null) return 0;
+      return current >= tableData.length ? null : current;
+    });
+  }, [tableData]);
 
   const toggleDestroy = (index: number) => {
     setDestroyRows((prev) => {
@@ -330,8 +328,188 @@ export default function DestroyRequest() {
   const toggleCheckAll = () => {
     const next = !checkAll;
     setCheckAll(next);
-    setDestroyRows(TABLE_DATA.map(() => next));
+    setDestroyRows(tableData.map(() => next));
   };
+
+  const handleCancel = useCallback(() => {
+    const selectedEpcs = tableData
+      .filter((row, index) => destroyRows[index] && row.EPC)
+      .map((row) => String(row.EPC));
+
+    if (selectedEpcs.length === 0) {
+      Alert.alert('Cancel', 'Please select at least one EPC.');
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Destroy Request',
+      `Cancel ${selectedEpcs.length} selected EPC(s)?`,
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            await dispatch(cancelDestroyRequests(selectedEpcs)).unwrap();
+            const nextFilters = { ...appliedFilters, page: 1, pageSize: PAGE_SIZE };
+            setAppliedFilters(nextFilters);
+            dispatch(fetchDataWarehouses(nextFilters));
+          },
+        },
+      ],
+    );
+  }, [appliedFilters, destroyRows, dispatch, tableData]);
+
+  const getSelectedRows = useCallback(
+    () => tableData.filter((row, index) => destroyRows[index] && row.EPC),
+    [destroyRows, tableData],
+  );
+
+  const fetchAllDestroyRequestRows = useCallback(
+    async (filters: DestroyRequestFilters) => {
+      const allRows: DestroyRequestData[] = [];
+      let nextPage = 1;
+      let expectedTotal = 0;
+      let expectedTotalPages = 1;
+
+      do {
+        const response = await destroyRequestService.getDataWarehouses({
+          ...filters,
+          page: nextPage,
+          pageSize: EXPORT_PAGE_SIZE,
+        });
+
+        allRows.push(...response.data);
+        expectedTotal = response.total;
+        expectedTotalPages =
+          response.totalPages ||
+          Math.max(1, Math.ceil(response.total / EXPORT_PAGE_SIZE));
+        nextPage += 1;
+      } while (nextPage <= expectedTotalPages && allRows.length < expectedTotal);
+
+      return allRows;
+    },
+    [],
+  );
+
+  const showExportSuccess = useCallback(
+    (title: string, result: Awaited<ReturnType<typeof exportDestroyRequestsToExcel>>) => {
+      Alert.alert(
+        title,
+        result.savedToFolder
+          ? `File saved: ${result.fileName}`
+          : `File saved: ${result.fileName}\n${result.fileUri}`,
+      );
+    },
+    [],
+  );
+
+  const handleExportExcel = useCallback(async () => {
+    if (exportingFdConfirm) return;
+
+    const selectedRows = getSelectedRows();
+
+    if (!checkAll && selectedRows.length === 0) {
+      Alert.alert('Export Excel', 'Please select at least one EPC.');
+      return;
+    }
+
+    const exportFilters = buildApiFilters(1);
+    const selectedStatuses = exportFilters.status ?? [];
+
+    if (
+      selectedStatuses.length !== 1 ||
+      selectedStatuses[0] !== FD_CONFIRM_STATUS
+    ) {
+      Alert.alert(
+        'Export Excel',
+        'Please select Status = FD confirm before exporting.',
+      );
+      return;
+    }
+
+    setExportingFdConfirm(true);
+
+    try {
+      const rows = checkAll
+        ? await fetchAllDestroyRequestRows(exportFilters)
+        : selectedRows;
+
+      if (rows.length === 0) {
+        Alert.alert('Export Excel', 'No FD confirm data to export.');
+        return;
+      }
+
+      const exportedEpcs = rows
+        .map((row) => row.EPC)
+        .filter((epc): epc is string => Boolean(epc));
+
+      const result = await exportDestroyRequestsToExcel(rows, TABLE_COLS_DEF);
+      const updateResult =
+        await destroyRequestService.updateCheckExport(exportedEpcs);
+
+      const refreshFilters = { ...exportFilters, page: 1, pageSize: PAGE_SIZE };
+      setAppliedFilters(refreshFilters);
+      dispatch(fetchDataWarehouses(refreshFilters));
+
+      showExportSuccess('Export Excel', result);
+      if (updateResult.updated === 0) {
+        Alert.alert(
+          'Export Excel',
+          'File saved, but no exported EPC was updated to CheckExport.',
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Export Excel',
+        error instanceof Error ? error.message : 'Failed to export Excel file.',
+      );
+    } finally {
+      setExportingFdConfirm(false);
+    }
+  }, [
+    buildApiFilters,
+    checkAll,
+    dispatch,
+    exportingFdConfirm,
+    fetchAllDestroyRequestRows,
+    getSelectedRows,
+    showExportSuccess,
+  ]);
+
+  const handleExportExcelAll = useCallback(async () => {
+    if (exportingAll) return;
+
+    setExportingAll(true);
+
+    try {
+      const allRows = await fetchAllDestroyRequestRows(appliedFilters);
+
+      if (allRows.length === 0) {
+        Alert.alert('Export Excel All', 'No data to export.');
+        return;
+      }
+
+      const result = await exportDestroyRequestsToExcel(
+        allRows,
+        TABLE_COLS_DEF,
+      );
+
+      showExportSuccess('Export Excel All', result);
+    } catch (error) {
+      Alert.alert(
+        'Export Excel All',
+        error instanceof Error ? error.message : 'Failed to export Excel file.',
+      );
+    } finally {
+      setExportingAll(false);
+    }
+  }, [
+    appliedFilters,
+    exportingAll,
+    fetchAllDestroyRequestRows,
+    showExportSuccess,
+  ]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
@@ -604,13 +782,13 @@ export default function DestroyRequest() {
           </FilterField>
         </View>
 
-        {/* Row 5: Search | Confirm | □ Check All */}
+        {/* Row 5: Search | Cancel | □ Check All */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity
             style={{
               flex: 1,
               height: 34,
-              backgroundColor: '#3B82F6',
+              backgroundColor: loadingTable ? '#94A3B8' : '#3B82F6',
               borderRadius: 10,
               flexDirection: 'row',
               alignItems: 'center',
@@ -622,11 +800,17 @@ export default function DestroyRequest() {
               shadowRadius: 4,
               elevation: 3,
             }}
+            onPress={handleSearch}
             activeOpacity={0.8}
+            disabled={loadingTable}
           >
-            <Feather name="search" size={12} color="white" />
+            {loadingTable ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Feather name="search" size={12} color="white" />
+            )}
             <Text style={{ fontSize: 12, fontWeight: '700', color: 'white' }}>
-              Search
+              {loadingTable ? 'Loading' : 'Search'}
             </Text>
           </TouchableOpacity>
 
@@ -634,18 +818,24 @@ export default function DestroyRequest() {
             style={{
               flex: 1,
               height: 34,
-              backgroundColor: '#10B981',
+              backgroundColor: '#EF4444',
               borderRadius: 10,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
             }}
+            onPress={handleCancel}
             activeOpacity={0.8}
+            disabled={canceling}
           >
-            <Feather name="check-circle" size={12} color="white" />
+            {canceling ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Feather name="x-circle" size={12} color="white" />
+            )}
             <Text style={{ fontSize: 12, fontWeight: '700', color: 'white' }}>
-              Confirm
+              {canceling ? 'Canceling' : 'Cancel'}
             </Text>
           </TouchableOpacity>
 
@@ -657,10 +847,80 @@ export default function DestroyRequest() {
             label="Check All"
           />
         </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              height: 34,
+              backgroundColor: exportingFdConfirm ? '#94A3B8' : '#2563EB',
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+            onPress={handleExportExcel}
+            activeOpacity={0.8}
+            disabled={exportingFdConfirm}
+          >
+            {exportingFdConfirm ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Feather name="download" size={12} color="white" />
+            )}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: 'white' }}>
+              {exportingFdConfirm ? 'Exporting' : 'Export Excel'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              height: 34,
+              backgroundColor: exportingAll ? '#94A3B8' : '#10B981',
+              borderRadius: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+            onPress={handleExportExcelAll}
+            activeOpacity={0.8}
+            disabled={exportingAll}
+          >
+            {exportingAll ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Feather name="file-text" size={12} color="white" />
+            )}
+            <Text style={{ fontSize: 12, fontWeight: '700', color: 'white' }}>
+              {exportingAll ? 'Exporting' : 'Export Excel All'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── DATA TABLE ── */}
       <View style={{ flex: 1, backgroundColor: 'white' }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderBottomWidth: 1,
+            borderColor: '#E2E8F0',
+          }}
+        >
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>
+            {tableData.length}/{total} rows
+          </Text>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8' }}>
+            Page {page}/{totalPages || 1}
+          </Text>
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -729,8 +989,45 @@ export default function DestroyRequest() {
             </View>
 
             <FlatList
-              data={TABLE_DATA}
+              data={tableData}
               keyExtractor={(_, i) => String(i)}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.35}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      paddingVertical: 14,
+                    }}
+                  >
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                  </View>
+                ) : null
+              }
+              ListEmptyComponent={
+                !loadingTable ? (
+                  <View
+                    style={{
+                      alignItems: 'center',
+                      paddingVertical: 32,
+                      width: 280,
+                    }}
+                  >
+                    <Feather name="inbox" size={28} color="#CBD5E1" />
+                    <Text
+                      style={{
+                        color: '#94A3B8',
+                        fontSize: 12,
+                        fontWeight: '600',
+                        marginTop: 8,
+                      }}
+                    >
+                      No data
+                    </Text>
+                  </View>
+                ) : null
+              }
               renderItem={({ item, index }) => {
                 const sel = selRow === index;
                 const rowBg = sel

@@ -11,6 +11,7 @@ import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CheckinModule } from './modules/checkin/checkin.module';
 import { CheckoutModule } from './modules/checkout/checkout.module';
 import { DestroyRequestModule } from './modules/destroy-request/destroy-request.module';
+import { DestroyScanModule } from './modules/destroy-scan/destroy-scan.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { DestroyRequestModule } from './modules/destroy-request/destroy-request.
     CheckinModule,
     CheckoutModule,
     DestroyRequestModule,
+    DestroyScanModule,
   ],
   controllers: [AppController],
   providers: [

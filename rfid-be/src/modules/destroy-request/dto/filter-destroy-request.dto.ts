@@ -3,6 +3,10 @@ import { Type } from 'class-transformer';
 
 export class FilterDestroyRequestDto {
   @IsOptional()
+  @IsString()
+  epc?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   modelName?: string[];

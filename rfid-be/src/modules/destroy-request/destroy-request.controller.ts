@@ -2,6 +2,8 @@ import { Controller, Get, Post, Body } from '@nestjs/common';
 import { DestroyRequestService } from './destroy-request.service';
 import { ResponseMessage } from 'src/common/decorators/response-message.decorator';
 import { FilterDestroyRequestDto } from './dto/filter-destroy-request.dto';
+import { CancelDestroyRequestDto } from './dto/cancel-destroy-request.dto';
+import { UpdateCheckExportDto } from './dto/update-check-export.dto';
 
 @Controller('destroy-request')
 export class DestroyRequestController {
@@ -59,6 +61,7 @@ export class DestroyRequestController {
   @ResponseMessage('Lấy danh sách thành công')
   async getDestroyRequestDataWarehouses(@Body() dto: FilterDestroyRequestDto) {
     return this.destroyRequestService.getDestroyRequestDataWarehouses(
+      dto.epc ?? '',
       dto.modelName ?? [],
       dto.stage ?? [],
       dto.season ?? [],
@@ -71,5 +74,17 @@ export class DestroyRequestController {
       dto.page ?? 1,
       dto.pageSize ?? 50,
     );
+  }
+
+  @Post('cancel')
+  @ResponseMessage('Há»§y destroy request thÃ nh cÃ´ng')
+  async cancelDestroyRequest(@Body() dto: CancelDestroyRequestDto) {
+    return this.destroyRequestService.cancelDestroyRequest(dto.epcs);
+  }
+
+  @Post('check-export')
+  @ResponseMessage('Cap nhat check export thanh cong')
+  async updateCheckExport(@Body() dto: UpdateCheckExportDto) {
+    return this.destroyRequestService.updateCheckExport(dto.epcs);
   }
 }
